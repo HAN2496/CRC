@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.io import loadmat
 path = 'datasets/epic'
 
-
+check_len = []
 
 datasets = []
 data_num = [i for i in range(25) if i!=16 and i!=20 and i!=23]
@@ -18,5 +18,6 @@ for i in data_num:
     total_path = f"{patient_path}/{specific_folder_path[0]}/levelground/gon/levelground_ccw_normal_01_01.csv"
     mat_file = pd.read_csv(total_path)
     datasets.append(mat_file)
-
+    check_len.append(len(mat_file.iloc[:, 0].values))
 print(datasets[0])
+print(check_len)
