@@ -9,7 +9,7 @@ from scipy.io import loadmat
 from tsai.all import *
 import numpy as np
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.layers import LSTM, Dense, Masking
 from keras.models import load_model
 
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
