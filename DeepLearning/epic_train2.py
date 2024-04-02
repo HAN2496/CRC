@@ -53,13 +53,6 @@ print(datasets)
 # 예측하려는 미래의 시간 단계 (k)
 k = 5
 
-# 예시 DataFrame 데이터셋 생성
-datasets = [
-    pd.DataFrame(np.random.rand(15000, 2)),
-    pd.DataFrame(np.random.rand(20000, 2)),
-    # 추가 데이터셋 ...
-]
-
 def split_sequences(sequences, n_steps):
     X, y = [], []
     for i in range(len(sequences)):
@@ -96,8 +89,8 @@ dataset = tf.data.Dataset.from_generator(
 # 패딩 추가 및 배치 처리
 dataset = dataset.padded_batch(
     batch_size=32,
-    padded_shapes=([None, 2], [2]),  # 입력 및 타겟 패딩
-    padding_values=(0.0, 0.0)  # 입력 및 타겟 패딩 값
+    padded_shapes=([None, 2], [2]),
+    padding_values=(tf.constant(0.0, dtype=tf.float64), tf.constant(0.0, dtype=tf.float64))
 )
 
 # 모델 정의
