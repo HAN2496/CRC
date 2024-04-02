@@ -15,7 +15,7 @@ for i = data_num
     end
     
     if specific_folder_name ~= ""
-        mat_files_path = fullfile(patient_path, specific_folder_name, 'levelground', 'gon');
+        mat_files_path = fullfile(patient_path, specific_folder_name, 'levelground', 'gcRight');
         mat_files = dir(fullfile(mat_files_path, '*.mat')); % Get all .mat files
 
         for file = mat_files'
@@ -35,3 +35,4 @@ for i = data_num
         fprintf('Specific folder not found in %s\n', patient_path);
     end
 end
+fprintf('finish\n');
