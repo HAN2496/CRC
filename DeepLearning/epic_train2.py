@@ -35,7 +35,7 @@ for i in data_num:
         total_path = f"{patient_path}/{specific_folder_path[0]}/levelground/gon/levelground_ccw_normal_02_01.csv"
     else:
         total_path = f"{patient_path}/{specific_folder_path[0]}/levelground/gon/levelground_ccw_normal_01_02.csv"
-    mat_file = pd.read_csv(total_path).iloc[:, [0, 4]].to_numpy()
+    mat_file = pd.read_csv(total_path).iloc[:, [0, 4]]
     data_len = len(mat_file)
     mat_file['Header'] = np.linspace(0, 1, data_len)
     datasets.append(mat_file)

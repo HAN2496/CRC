@@ -52,7 +52,7 @@ print(combined_data)
 
 X = combined_data[['Header', 'hip_sagittal']].values
 y = combined_data[['Header', 'hip_sagittal']].shift(shift_interval).fillna(method='ffill').values
-X = X.reshape((X.shape[0], 1, X.shape[1]))
+X = X.reshape((X.shape[0], len(X), X.shape[1]))
 
 model = Sequential([
     LSTM(50, activation='relu', input_shape=(X.shape[1], X.shape[2])),
