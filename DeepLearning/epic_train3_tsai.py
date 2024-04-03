@@ -50,20 +50,22 @@ for i in data_num:
 
 X = np.array(X)
 y = np.array(y)
-
-splits = get_splits(y, valid_size=0.2, stratify=False, random_state=23, shuffle=True)
-tfms  = [None, [TSRegression()]]
-dsets = TSDatasets(X, y, tfms=tfms, splits=splits, inplace=True)
-dls = TSDataLoaders.from_dsets(dsets.train, dsets.valid, bs=64, num_workers=0)
+y = y.reshape(y.shape[0], -1)
 
 print(f"X shape: {X.shape}, y shape: {y.shape}")
 print(f"X shape: {X.shape[1]}, y shape: {y.shape[1]}")
 print(f"Number of samples in X: {len(X)}")
 print(f"Number of targets: {len(y)}")
 
+
+splits = get_splits(y, valid_size=0.2, stratify=False, random_state=23, shuffle=True)
+tfms  = [None, [TSRegression()]]
+dsets = TSDatasets(X, y, tfms=tfms, splits=splits, inplace=True)
+dls = TSDataLoaders.from_dsets(dsets.train, dsets.valid, bs=64, num_workers=0)
+
+
 # 모델 초기화
-#model = InceptionTime(X.shape[1], y.shape[1])
-model = XCM(dls.vars, dls.c, dls.len)
+model = InceptionTime(X.shape[1], y.shape[1])
 
 # Learner 객체 생성
 learn = Learner(dls, model, metrics=rmse)
@@ -72,4 +74,4 @@ learn = Learner(dls, model, metrics=rmse)
 learn.fit_one_cycle(800, lr_max=1e-3)
 
 
-learn.save("test")
+learn.save("test2")
