@@ -62,7 +62,8 @@ print(f"Number of samples in X: {len(X)}")
 print(f"Number of targets: {len(y)}")
 
 # 모델 초기화
-model = InceptionTime(X.shape[1], y.shape[1])
+#model = InceptionTime(X.shape[1], y.shape[1])
+model = XCM(dls.vars, dls.c, dls.len)
 
 # Learner 객체 생성
 learn = Learner(dls, model, metrics=rmse)
