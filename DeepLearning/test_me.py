@@ -1,10 +1,12 @@
 import numpy as np
-import pandas as pd
-import os
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from scipy.io import loadmat
-data_name = "levelground_ccw_normal_01_01"
-path = f'datasets/epic/AB06/10_09_18/levelground/gon/{data_name}.csv'
-data = pd.read_csv(path)
-print(data)
+import pandas as pd
+total_path = f"datasets/epic/AB06/10_09_18/levelground/gcRight/levelground_ccw_normal_02_01.csv"
+
+def to_polar_coordinates(value):
+    theta = (value / 100) * 2 * np.pi
+    return (np.cos(theta), np.sin(theta))
+
+a = np.array([1, 2])
+
+print(np.array(to_polar_coordinates(a)))
