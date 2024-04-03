@@ -70,7 +70,7 @@ model = InceptionTime(X.shape[1], y.shape[1])
 # Learner 객체 생성
 learn = Learner(dls, model, metrics=rmse)
 
-learn.load("test")
+learn.load("test2")
 learn.model.eval()
 
 example_input_array = X[100].reshape(1, X.shape[1], X.shape[2])
