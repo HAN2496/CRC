@@ -15,6 +15,8 @@ def to_polar_coordinates(value):
     ys = np.sin(theta)
     return np.column_stack((xs, ys))
 
+
+
 shift_interval = +10
 window_length = 1000
 stride_num = 100
@@ -41,6 +43,7 @@ for i in data_num:
     input = pd.read_csv(input_path).iloc[::5, 4].values
     target = pd.read_csv(target_path).iloc[:, 1].values
     target = to_polar_coordinates(target)
+    target_scalar = target
     sw = SlidingWindow(window_length, stride=stride_num, get_y=None)
     X_window, _ = sw(input)
     y_window, _ = sw(target)
@@ -50,6 +53,7 @@ for i in data_num:
 
 X = np.array(X)
 y = np.array(y)
+y_scalar = y
 y = y.reshape(y.shape[0], -1)
 
 print(f"X shape: {X.shape}, y shape: {y.shape}")
@@ -73,7 +77,8 @@ learn = Learner(dls, model, metrics=rmse)
 learn.load("test2")
 learn.model.eval()
 
-example_input_array = X[100].reshape(1, X.shape[1], X.shape[2])
+index_num = np.random.randint(564)
+example_input_array = X[index_num].reshape(1, X.shape[1], X.shape[2])
 
 example_input_tensor = torch.tensor(example_input_array, dtype=torch.float)
 
@@ -82,13 +87,53 @@ with torch.no_grad():
     prediction = learn.model(example_input_tensor)
 
 print(prediction)
-actual_value = y[100]
+actual_value = y[index_num]
 
 # 예측 결과와 실제 값 비교
 plt.figure(figsize=(10, 6))
+plt.subplot(211)
 plt.plot(prediction[0].numpy(), label='Predicted')
 plt.plot(actual_value, label='Actual')
 plt.title('Prediction vs Actual')
+plt.xlabel('Time Step')
+plt.ylabel('Value')
+plt.legend()
+
+print(actual_value.shape)
+
+def xy_to_scaled_value(x, y):
+    """
+    (x, y) 좌표를 받아서 해당 좌표가 나타내는 각도를 0에서 100 사이의 값으로 변환합니다.
+    """
+    # arctan2를 사용하여 theta 계산
+    theta = np.arctan2(y, x)
+    
+    # theta가 음수인 경우, 2pi를 더해 양수로 만듦
+    if theta < 0:
+        theta += 2 * np.pi
+    
+    # theta를 0에서 100으로 스케일링
+    scaled_value = (theta / (2 * np.pi)) * 100
+    
+    return scaled_value
+
+actual_value_scalar = []
+prediction_scalar = []
+tmp = prediction[0].numpy()
+for i in range(len(actual_value)):
+    if i % 2 == 0:
+        actual_value_scalar.append(xy_to_scaled_value(actual_value[i], actual_value[i+1]))
+        prediction_scalar.append(xy_to_scaled_value(tmp[i], tmp[i+1]))
+
+actual_value_scalar = np.array(actual_value_scalar)
+prediction_scalar = np.array(prediction_scalar)
+print(actual_value_scalar.shape)
+print(prediction_scalar.shape)
+
+plt.subplot(212)
+plt.plot(prediction_scalar, label='Predicted')
+plt.plot(actual_value_scalar, label='Actual')
+plt.title('Prediction vs Actual in scalar(0 ~ 100)')
 plt.xlabel('Time Step')
 plt.ylabel('Value')
 plt.legend()
