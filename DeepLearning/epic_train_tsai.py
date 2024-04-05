@@ -87,7 +87,9 @@ def main(args):
     y = y.reshape(y.shape[0], -1)
     #plt.figure(figsize=(10,10))
     print("y_scalar shape: ", y_scalar.shape)
-    plt.plot(y_scalar[:, :])
+    #plt.plot(y_scalar[:, :])
+    tmp = 24
+    plt.plot(y[tmp][::2], y[tmp][1::2])
     plt.show()
     y_scalar = y_scalar.reshape(y.shape[0], -1)
 
