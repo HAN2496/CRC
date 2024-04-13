@@ -12,6 +12,26 @@ from utils import to_polar_coordinates, arg_parser, common_arg_parser, SaveLearn
 from fastai.callback.tensorboard import TensorBoardCallback
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
+# 데이터 로드 및 처리
+def load_prediction_data(file_path, window_length, stride_num, data_pos):
+    data = pd.read_csv(file_path).iloc[:, data_pos]
+    sw = SlidingWindow(window_length, stride=stride_num, get_y=None)
+    X_pred, _ = sw(data.values)
+    return np.array(X_pred)
+
+# 예측 결과와 실제 데이터의 비교 플롯
+def plot_predictions(predictions, actuals, title="Prediction vs Actual Data", save_path=None):
+    plt.figure(figsize=(10, 5))
+    plt.plot(actuals, label='Actual Data', color='blue')
+    plt.plot(predictions, label='Predictions', color='red', linestyle='--')
+    plt.title(title)
+    plt.xlabel('Time')
+    plt.ylabel('Value')
+    plt.legend()
+    plt.grid(True)
+    if save_path:
+        plt.savefig(save_path)
+    plt.show()
 
 def main(args):
     #parser 받은 값들로 세팅
@@ -89,36 +109,32 @@ def main(args):
         os.makedirs('models/prediction/', exist_ok=True)
         learn.fit_one_cycle(args.learn_num, 1e-3)
         learn.export(f"models/prediction/{prefix}")
-        learn.export(f"models/prediction/{prefix}.pt")
-        learn.export(f"models/prediction/{prefix}.pth")
+
+        learn.export(f"prediction/{prefix}.pt")
+        learn.export(f"prediction/{prefix}.pth")
         print(f"Finish Learning. Model is at prediction/{prefix}")
     else:
         #테스트 구간
         learn.load(f"prediction/{prefix}")
-        learn.model.eval()
-        index_num = np.random.randint(len(X))
-        example_input_array = X[index_num].reshape(1, X.shape[1], X.shape[2])
 
-        example_input_tensor = torch.tensor(example_input_array, dtype=torch.float)
+        preds, targs = learn.get_preds(ds_idx=1)  # 1 represents the validation set in fastai
+        preds = preds.numpy().flatten()
+        targs = targs.numpy().flatten()
 
-        # 예측 실행
-        with torch.no_grad():
-            prediction = learn.model(example_input_tensor)
+        # Error Metrics
+        rmse_value = mean_squared_error(targs, preds, squared=False)
+        mae_value = mean_absolute_error(targs, preds)
+        print(f"RMSE: {rmse_value}, MAE: {mae_value}")
 
-        print(f"Prediction shape: {prediction.shape}")
-        actual_value = y[index_num]
-
-        # 예측 결과와 실제 값 비교
-        plt.figure(figsize=(10, 10))
-        plt.subplot(211)
-        plt.plot(prediction[0].numpy(), label='Predicted')
-        plt.plot(actual_value, label='Actual')
-        plt.title(f'Prediction vs Actual (patient {args.pnum1} and {args.pnum2}) (index num {index_num})')
-        plt.xlabel('Time Step')
-        plt.ylabel('Value')
+        plt.figure(figsize=(10, 5))
+        plt.plot(targs, label='Actual', color='blue')
+        plt.plot(preds, label='Predicted', color='red', linestyle='--')
+        plt.title('Comparison of Actual and Predicted Values')
+        plt.xlabel('Time')
+        plt.ylabel('Values')
         plt.legend()
-
-        print(actual_value.shape)
-
+        plt.grid(True)
+        plt.show()
+    
 if __name__ == '__main__':
     main(sys.argv)
