@@ -89,6 +89,8 @@ def main(args):
         os.makedirs('models/prediction/', exist_ok=True)
         learn.fit_one_cycle(args.learn_num, 1e-3)
         learn.export(f"models/prediction/{prefix}")
+        learn.export(f"models/prediction/{prefix}.pt")
+        learn.export(f"models/prediction/{prefix}.pth")
         print(f"Finish Learning. Model is at prediction/{prefix}")
     else:
         #테스트 구간
