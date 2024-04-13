@@ -17,9 +17,7 @@ def main(args):
     arg_parser = common_arg_parser()
     args, unknown_args = arg_parser.parse_known_args(args)
     window_length = args.win_len
-    stride_num = args.stride_num
     prefix = args.prefix
-    shift = -5
 
     #데이터 로드
     X = []
@@ -48,21 +46,28 @@ def main(args):
         specific_folder_path = [folder for folder in folders_in_patient_path if folder != "osimxml"][0]
 
         if i==0:
-            gon_path1 = f"{patient_path}/{specific_folder_path}/levelground/gon/levelground_ccw_normal_02_01.csv"
-            gon_path2 = f"{patient_path}/{specific_folder_path}/levelground/gon/levelground_cw_normal_02_01.csv"
-            imu_path1 = f"{patient_path}/{specific_folder_path}/levelground/imu/levelground_ccw_normal_02_01.csv"
-
+            gon_path_ccw = f"{patient_path}/{specific_folder_path}/levelground/gon/levelground_ccw_normal_02_01.csv"
+            imu_path_ccw = f"{patient_path}/{specific_folder_path}/levelground/imu/levelground_ccw_normal_02_01.csv"
+            phase_path_ccw = f"{patient_path}/{specific_folder_path}/levelground/gcRight/levelground_ccw_normal_02_01.csv"
+            gon_path_cw = f"{patient_path}/{specific_folder_path}/levelground/gon/levelground_cw_normal_02_01.csv"
+            phase_path_cw = f"{patient_path}/{specific_folder_path}/levelground/gcRight/levelground_cw_normal_02_01.csv"
         else:
-            gon_path1 = f"{patient_path}/{specific_folder_path}/levelground/gon/levelground_ccw_normal_01_02.csv"
-            gon_path2 = f"{patient_path}/{specific_folder_path}/levelground/gon/levelground_cw_normal_01_02.csv"
-            imu_path1 = f"{patient_path}/{specific_folder_path}/levelground/imu/levelground_ccw_normal_01_02.csv"
+            gon_path_ccw = f"{patient_path}/{specific_folder_path}/levelground/gon/levelground_ccw_normal_01_02.csv"
+            imu_path_ccw = f"{patient_path}/{specific_folder_path}/levelground/imu/levelground_ccw_normal_01_02.csv"
+            phase_path_ccw = f"{patient_path}/{specific_folder_path}/levelground/gcRight/levelground_ccw_normal_01_02.csv"
+            gon_path_cw = f"{patient_path}/{specific_folder_path}/levelground/gon/levelground_cw_normal_01_02.csv"
+            imu_path_cw = f"{patient_path}/{specific_folder_path}/levelground/imu/levelground_cw_normal_02_01.csv"
+            phase_path_cw = f"{patient_path}/{specific_folder_path}/levelground/gcRight/levelground_cw_normal_01_02.csv"
 
-        gon1 = pd.read_csv(gon_path1).iloc[::5, 4]
-        imu1 = pd.read_csv(imu_path1).iloc[:, 4]
-        input_data = np.column_stack((gon1.values, imu1.values))
+        gon_ccw = pd.read_csv(gon_path_ccw).iloc[::5, 4]
+        imu_ccw = pd.read_csv(imu_path_ccw).iloc[:, 4]
+        phase_ccw = pd.read_csv(phase_path_ccw).iloc[:, 1]
+        input_data = np.concatenate((phase_ccw, gon_ccw.values))
+        print(f"input data shape: {input_data.shape}")
 
-        sw = SlidingWindow(window_length, get_y=0, horizon=args.horizon)
+        sw = SlidingWindow(window_length, stride= args.stride_num, get_y=[0], horizon=args.horizon)
         X_window, y_window = sw(input_data)
+        print(f"X_window shape: {X_window.shape} / Y_window shape: {y_window.shape}")
         X.extend(X_window)
         y.extend(y_window)
 
@@ -70,14 +75,18 @@ def main(args):
     y = np.array(y)
     splits = TimeSplitter(valid_size=0.2)(y)
     tfms = [None, TSForecasting()]
-    batch_tfms = TSStandardize()
-    fcst = TSForecaster(X, y, splits=splits, path='models', tfms=tfms, batch_tfms=batch_tfms, bs=512, arch=args.arch, metrics=mae)
 
+    batch_tfms = TSStandardize()
+    print(f"X shape: {X.shape}")
+    print(f"Y shape: {y.shape}")
+
+    learn = TSForecaster(X, y, splits=splits, batch_size=16, path="models", arch="PatchTST", metrics=[mse, mae])
+    print(learn.summary())
     if args.test == False:
         # 학습 시작
         os.makedirs('models/prediction/', exist_ok=True)
-        fcst.fit_one_cycle(800, 1e-3)
-        fcst.export(f"prediction/{prefix}.pt")
+        learn.fit_one_cycle(800, 1e-3)
+        learn.export(f"prediction/{prefix}.pt")
         print(f"Finish Learning. Model is at prediction/{prefix}")
     else:
         #테스트 결과 플롯
@@ -92,7 +101,7 @@ def main(args):
         results_df.loc["valid", "mae"] = mean_absolute_error(scaled_y_true.flatten(), scaled_preds.flatten())
         results_df
 
-        preds, targets = fcst.get_preds(dl=dls.valid)
+        preds, targets = learn.get_preds(dl=dls.valid)
         
         a = 2
         b = 3
