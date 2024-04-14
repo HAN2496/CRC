@@ -13,27 +13,6 @@ from fastai.callback.tensorboard import TensorBoardCallback
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
 
-# 데이터 로드 및 처리
-def load_prediction_data(file_path, window_length, stride_num, data_pos):
-    data = pd.read_csv(file_path).iloc[:, data_pos]
-    sw = SlidingWindow(window_length, stride=stride_num, get_y=None)
-    X_pred, _ = sw(data.values)
-    return np.array(X_pred)
-
-# 예측 결과와 실제 데이터의 비교 플롯
-def plot_predictions(predictions, actuals, title="Prediction vs Actual Data", save_path=None):
-    plt.figure(figsize=(10, 5))
-    plt.plot(actuals, label='Actual Data', color='blue')
-    plt.plot(predictions, label='Predictions', color='red', linestyle='--')
-    plt.title(title)
-    plt.xlabel('Time')
-    plt.ylabel('Value')
-    plt.legend()
-    plt.grid(True)
-    if save_path:
-        plt.savefig(save_path)
-    plt.show()
-
 #Step0: GPU 사용 가능 여부 확인
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f'Using device: {device}')
@@ -108,7 +87,7 @@ def main(args):
     learn = Learner(dls, model, metrics=rmse)
     #learn = TSForecaster(X, y, splits=splits, batch_size=16, path="models", arch="PatchTST", metrics=[mse, mae])
     get_arch(learn)
-    if args.test == False:
+    if args.test == False:]
         os.makedirs('models/prediction/', exist_ok=True)
         learn.fit_one_cycle(args.learn_num, 1e-3)
         learn.export(f"models/prediction/{prefix}")
@@ -120,25 +99,6 @@ def main(args):
         #테스트 구간
         learn = load_learner(f"models/prediction/{prefix}.pth", cpu=False)
 
-        probas, _, preds = learn.get_X_preds(X[splits[1]])
-        print(skm.mean_squared_error(y[splits[1]], preds, squared=False))
 
-        actuals = []
-        preds = []
-
-        # Retrieve and process each batch from the validation DataLoader
-        for xb, yb in learn.dls.valid:
-            with torch.no_grad():
-                pred = learn.model(xb)  # Generate predictions
-            preds.extend(pred.cpu().numpy())  # Store predictions
-            actuals.extend(yb.cpu().numpy())  # Store actual values
-
-        # Convert lists to arrays for plotting
-        actuals = np.array(actuals).flatten()
-        preds = np.array(preds).flatten()
-
-        # Plotting predictions vs actuals
-        plot_predictions(preds, actuals, title="Test Predictions vs Actuals", save_path=f"{prefix}_prediction_comparison.png")
-  
 if __name__ == '__main__':
     main(sys.argv)
