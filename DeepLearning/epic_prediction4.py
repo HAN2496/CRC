@@ -12,6 +12,7 @@ from utils import to_polar_coordinates, arg_parser, common_arg_parser, SaveLearn
 from fastai.callback.tensorboard import TensorBoardCallback
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
+
 # 데이터 로드 및 처리
 def load_prediction_data(file_path, window_length, stride_num, data_pos):
     data = pd.read_csv(file_path).iloc[:, data_pos]
@@ -33,6 +34,10 @@ def plot_predictions(predictions, actuals, title="Prediction vs Actual Data", sa
         plt.savefig(save_path)
     plt.show()
 
+#Step0: GPU 사용 가능 여부 확인
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f'Using device: {device}')
+
 def main(args):
     #parser 받은 값들로 세팅
     arg_parser = common_arg_parser()
@@ -43,9 +48,7 @@ def main(args):
     X = []
     y = []
     if args.test==False:
-        #Step0: GPU 사용 가능 여부 확인
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f'Using device: {device}')
+
 
         excluded_values = [16, 20, 23]
         random_values = []
@@ -115,26 +118,23 @@ def main(args):
         print(f"Finish Learning. Model is at prediction/{prefix}")
     else:
         #테스트 구간
-        learn.load(f"prediction/{prefix}")
+        learn = load_learner(f"models/prediction/{prefix}.pth")
+        actuals = []
+        preds = []
 
-        preds, targs = learn.get_preds(ds_idx=1)  # 1 represents the validation set in fastai
-        preds = preds.numpy().flatten()
-        targs = targs.numpy().flatten()
+        # Retrieve and process each batch from the validation DataLoader
+        for xb, yb in learn.dls.valid:
+            with torch.no_grad():
+                pred = learn.model(xb)  # Generate predictions
+            preds.extend(pred.cpu().numpy())  # Store predictions
+            actuals.extend(yb.cpu().numpy())  # Store actual values
 
-        # Error Metrics
-        rmse_value = mean_squared_error(targs, preds, squared=False)
-        mae_value = mean_absolute_error(targs, preds)
-        print(f"RMSE: {rmse_value}, MAE: {mae_value}")
+        # Convert lists to arrays for plotting
+        actuals = np.array(actuals).flatten()
+        preds = np.array(preds).flatten()
 
-        plt.figure(figsize=(10, 5))
-        plt.plot(targs, label='Actual', color='blue')
-        plt.plot(preds, label='Predicted', color='red', linestyle='--')
-        plt.title('Comparison of Actual and Predicted Values')
-        plt.xlabel('Time')
-        plt.ylabel('Values')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
-    
+        # Plotting predictions vs actuals
+        plot_predictions(preds, actuals, title="Test Predictions vs Actuals", save_path=f"{prefix}_prediction_comparison.png")
+  
 if __name__ == '__main__':
     main(sys.argv)
