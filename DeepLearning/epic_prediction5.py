@@ -87,7 +87,7 @@ def main(args):
     learn = Learner(dls, model, metrics=rmse)
     #learn = TSForecaster(X, y, splits=splits, batch_size=16, path="models", arch="PatchTST", metrics=[mse, mae])
     get_arch(learn)
-    if args.test == False:]
+    if args.test == False:
         os.makedirs('models/prediction/', exist_ok=True)
         learn.fit_one_cycle(args.learn_num, 1e-3)
         learn.export(f"models/prediction/{prefix}")
