@@ -1,19 +1,25 @@
 import numpy as np
 import pandas as pd
-import c3d
 import os
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from scipy.io import loadmat
-from tsai.all import *
 import numpy as np
 from keras.models import load_model
 
 def to_polar_coordinates(value):
-    theta = (value / 100) * 2 * np.pi
-    xs = np.cos(theta)
-    ys = np.sin(theta)
-    return np.column_stack((xs, ys))
+    # Ensure input is iterable
+    if not isinstance(value, (list, tuple, np.ndarray)):
+        value = [value]
+    
+    # Convert each element in the input list to polar coordinates
+    polar_coords = []
+    for val in value:
+        theta = (val / 100) * 2 * np.pi
+        xs = np.cos(theta)
+        ys = np.sin(theta)
+        polar_coords.append([xs, ys])
+        
+    return np.array(polar_coords)
 
 def cubic_interpolate(x, y, interval=0.001):
     x = np.array(x)
@@ -89,6 +95,15 @@ plt.suptitle('Comparison of Real Hip Joint Angles and Interpolation', y=0.95)
 Estimation part 부분
 """
 
+start_index = 1040
+end_index1 = 1120
+end_index2 = 1272
+
+data_header = data_header[start_index:end_index1]
+data_hip = data_hip[start_index:end_index1]
+data_phase = data_phase[start_index:end_index1]
+
+
 fig, ax1 = plt.subplots()
 ax1.plot(data_header, data_hip, color='blue')
 ax1.set_ylabel("Hip joint angle (Deg)", color='blue')
@@ -101,13 +116,26 @@ plt.title('Hip joint angle and Gait phase (Scalar)')
 # 그래프 표시
 plt.show()
 
+data_phase_polar = to_polar_coordinates(data_phase)
+
 
 fig, ax1 = plt.subplots()
 ax1.plot(data_header, data_hip, color='blue')
 ax1.set_ylabel("Hip joint angle (Deg)", color='blue')
 
 ax2 = ax1.twinx()
-ax2.plot(data_header, data_phase, color='red')
+ax2.plot(data_header, data_phase_polar[:, 0], color='red')
+ax2.plot(data_header, data_phase_polar[:, 1], color='red')
+ax2.plot(data_phase_polar[:, 0], data_phase_polar[:, 1], color='blue')
 ax2.set_ylabel("Gait phase (rad)", color='red')
 plt.title('Hip joint angle and Gait phase (Polar coordinates)')
+plt.show()
+
+
+xs = [i for i in range(100)]
+ys = [x/100 for x in xs]
+#plt.plot(xs, ys)
+yp = np.array(to_polar_coordinates(xs))
+print(yp.shape)
+plt.plot(yp[:, 0], yp[:, 1])
 plt.show()
