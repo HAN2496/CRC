@@ -2,141 +2,167 @@ import numpy as np
 from data_loader import load_data
 import matplotlib.pyplot as plt
 from joblib import dump, load
-"""
-import numpy as np
-import matplotlib.pyplot as plt
-from joblib import load
+import os
+import pandas as pd
 
-# 커널 클래스 정의
-class ExpSineSquaredKernel:
-    def __init__(self, length_scale=1.0, periodicity=1.0):
-        self.length_scale = length_scale
-        self.periodicity = periodicity
+#SUBJECTS = [6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 27, 28, 30] # All subjects
+SUBJECTS = [6, 8]
 
-    def __call__(self, X, Y=None):
-        if Y is None:
-            Y = X
-        dists = np.sum((X[:, np.newaxis, :] - Y[np.newaxis, :, :]) ** 2, axis=2)
-        sin_dists = np.sin(np.pi * np.sqrt(dists) / self.periodicity) ** 2
-        return np.exp(-2 * sin_dists / self.length_scale ** 2)
+class Datasets:
+    def __init__(self):
+        self.load_data()
+        self.divide_by_section()
 
-    def get_params(self):
-        return {
-            'length_scale': self.length_scale,
-            'periodicity': self.periodicity
+    def load_data(self):
+        self.data = []
+        folder_path_data_gon = 'EPIC/AB{}/gon'
+        folder_path_data_imu = 'EPIC/AB{}/imu'
+        folder_path_target = 'EPIC/AB{}/gcRight'
+        
+        # Load data
+        for i in SUBJECTS:
+            data_path_gon = folder_path_data_gon.format(str(i).zfill(2))
+            # data_path_imu = folder_path_data_imu.format(str(i).zfill(2))
+            target_path = folder_path_target.format(str(i).zfill(2))
+
+            for filename in os.listdir(data_path_gon):
+                if filename.endswith('.csv') and "ccw_normal" in filename:
+                    df_data_gon = pd.read_csv(os.path.join(data_path_gon, filename))
+                    # df_data_imu = pd.read_csv(os.path.join(data_path_imu, filename))
+                    df_target = pd.read_csv(os.path.join(target_path, filename))
+                    
+                    hip_sagittal = df_data_gon['hip_sagittal'][::5].values
+                    # foot_Accel_X = df_data_imu['foot_Accel_X'].values
+                    # foot_Accel_Y = df_data_imu['foot_Accel_Y'].values
+                    # foot_Accel_Z = df_data_imu['foot_Accel_Z'].values
+                    HeelStrike = df_target['HeelStrike'].values
+
+                    heel_strike_radians = (HeelStrike / 100.0) * 2 * np.pi
+                    heel_strike_x = np.cos(heel_strike_radians)
+                    heel_strike_y = np.sin(heel_strike_radians)
+
+                    self.data.append({
+                        'hip_sagittal': hip_sagittal,
+                        'heel_strike_x': heel_strike_x,
+                        'heel_strike_y': heel_strike_y,
+                        'HeelStrike': HeelStrike
+                    })
+        self.data = np.array(self.data)
+    
+    def index_by_scalar(self, start=0, end=100):
+        random_test_num = np.random.randint(0, len(self.data))
+        entry = self.data[random_test_num]
+        start_idx = np.where(entry['HeelStrike'] == start)[0][0]
+        end_idx = np.where(entry['HeelStrike'] == end)[0][0]
+        selected_data = {
+            'hip_angles': entry['hip_sagittal'][start_idx:end_idx+1],
+            'heel_strike_x': entry['heel_strike_x'][start_idx:end_idx+1],
+            'heel_strike_y': entry['heel_strike_y'][start_idx:end_idx+1],
+            'HeelStrike': entry['HeelStrike'][start_idx:end_idx+1]
         }
+        return selected_data
 
-class WhiteKernel:
-    def __init__(self, noise_level=1.0):
-        self.noise_level = noise_level
 
-    def __call__(self, X, Y=None):
-        if Y is None:
-            return self.noise_level * np.eye(X.shape[0])
-        elif X.shape == Y.shape:
-            return self.noise_level * np.eye(X.shape[0])
-        else:
-            return np.zeros((X.shape[0], Y.shape[0]))
+    def divide_by_section(self):
+        for entry in self.data:
+            hip_angles = entry['hip_sagittal']
+            heel_strike_indices = self.find_zero_indices(entry['HeelStrike'], 0)
 
-    def get_params(self):
-        return {
-            'noise_level': self.noise_level
-        }
+            entry['segments'] = {
+                'initial': {
+                    'hip_angles': hip_angles[heel_strike_indices[0]:heel_strike_indices[1]],
+                    'heel_strike_x': entry['heel_strike_x'][heel_strike_indices[0]:heel_strike_indices[1]],
+                    'heel_strike_y': entry['heel_strike_y'][heel_strike_indices[0]:heel_strike_indices[1]],
+                    'HeelStrike': entry['HeelStrike'][heel_strike_indices[0]:heel_strike_indices[1]]
+                },
+                'mid': {
+                    'hip_angles': hip_angles[heel_strike_indices[2]:heel_strike_indices[-1]],
+                    'heel_strike_x': entry['heel_strike_x'][heel_strike_indices[2]:heel_strike_indices[-1]],
+                    'heel_strike_y': entry['heel_strike_y'][heel_strike_indices[2]:heel_strike_indices[-1]],
+                    'HeelStrike': entry['HeelStrike'][heel_strike_indices[2]:heel_strike_indices[-1]]
+                },
+                'final': {
+                    'hip_angles': hip_angles[heel_strike_indices[-1]:],
+                    'heel_strike_x': entry['heel_strike_x'][heel_strike_indices[-1]:],
+                    'heel_strike_y': entry['heel_strike_y'][heel_strike_indices[-1]:],
+                    'HeelStrike': entry['HeelStrike'][heel_strike_indices[-1]:]
+                }
+            }
 
-class SumKernel:
-    def __init__(self, k1, k2):
-        self.k1 = k1
-        self.k2 = k2
+    @staticmethod
+    def find_zero_indices(values_list, target_value):
+        return [index for index, value in enumerate(values_list) if value == target_value]
 
-    def __call__(self, X, Y=None):
-        K1 = self.k1(X, Y)
-        K2 = self.k2(X, Y)
-        return K1 + K2
-
-    def get_params(self):
-        params = self.k1.get_params()
-        params.update(self.k2.get_params())
-        return params
-
-# GaussianProcessRegressorCustom 클래스 정의
-class GaussianProcessRegressorCustom:
-    def __init__(self, kernel):
-        self.kernel = kernel
-
-    def fit(self, X, y):
-        K = self.kernel(X) + 1e-10 * np.eye(len(X))  # Add small noise for numerical stability
-        self.K_inv = np.linalg.inv(K)
-        self.X_train = X
-        self.y_train = y
+class GP:
+    def __init__(self, path="gaussian_process_regressor.joblib"):
+        self.path = path
+        self.model = load(self.path)
+        self.cut_one_cycle()
 
     def predict(self, X):
-        K_trans = self.kernel(self.X_train, X)
-        K_pred = self.kernel(X)
-        y_mean = K_trans.T @ self.K_inv @ self.y_train
-        y_var = K_pred - K_trans.T @ self.K_inv @ K_trans
-        return y_mean, np.sqrt(np.diag(y_var))
+        X = np.array(X)
+        y_pred, sigma = self.model.predict(X, return_std=True)
+        return y_pred, sigma
 
-# 학습된 Gaussian Process Regressor 로드 및 매개변수 출력
-gp = load('gaussian_process_regressor.joblib')
-print("Learned kernel parameters:")
-kernel_1 = gp.kernel_.k1  # ExpSineSquared 커널
-kernel_2 = gp.kernel_.k2  # WhiteKernel 커널
+    def cut_one_cycle(self):
+        indices = np.arange(0, 100, 0.05)
+        rad = (indices / 100.0) * 2 * np.pi
+        x_rad = np.cos(rad)
+        y_rad = np.sin(rad)
+        X = np.column_stack((x_rad, y_rad))
+        y_pred, sigma = self.predict(X)
+        self.X_rad = X
+        self.X = indices
+        self.y_pred = y_pred
+        self.sigma = sigma
 
-print(f"ExpSineSquared kernel parameters:\n{kernel_1}\n")
-print("ExpSineSquared kernel parameters (detailed):")
-for param, value in kernel_1.get_params().items():
-    print(f"{param}: {value}")
+    def plot_one_cycle(self):
+        plt.plot(self.X, self.y_pred)
+        plt.fill_between(self.X, self.y_pred - self.sigma, self.y_pred + self.sigma, color='blue', alpha=0.2,
+                        label='Confidence Interval (1 std dev)')
+        plt.xlabel('Time')
+        plt.ylabel('Hip Sagittal Angle')
+        plt.legend()
+        plt.show()
 
-print(f"\nWhiteKernel parameters:\n{kernel_2}\n")
-print("WhiteKernel parameters (detailed):")
-for param, value in kernel_2.get_params().items():
-    print(f"{param}: {value}")
+start = 30
+end = 100
+dataset = Datasets()
+gp = GP()
 
-print("\nGaussianProcessRegressor parameters:")
-for param, value in gp.get_params().items():
-    print(f"{param}: {value}")
+selected_data = dataset.index_by_scalar()
+print(selected_data)
 
-# 데이터 생성
-np.random.seed(0)
-X_train = np.random.rand(10, 1)
-y_train = np.sin(X_train * 2 * np.pi).ravel()
+X = np.column_stack((selected_data['heel_strike_x'], selected_data['heel_strike_y']))
+y = selected_data['hip_angles']
 
-# 사용자 정의 커널 및 GPR 구현
-kernel = SumKernel(ExpSineSquaredKernel(length_scale=3.0, periodicity=3.0), WhiteKernel(noise_level=0.1))
-gpr = GaussianProcessRegressorCustom(kernel)
-gpr.fit(X_train, y_train)
 
-# 예측
-X_test = np.linspace(0, 1, 100).reshape(-1, 1)
-y_mean, y_std = gpr.predict(X_test)
+y_pred, sigma = gp.predict(X)
 
-# 결과 시각화
+
+
 plt.figure(figsize=(10, 6))
-plt.plot(X_train, y_train, 'r.', markersize=10, label='Training Data')
-plt.plot(X_test, y_mean, 'b-', label='Predicted Mean')
-plt.fill_between(X_test.ravel(), y_mean - y_std, y_mean + y_std, color='blue', alpha=0.2, label='Confidence Interval (1 std dev)')
-plt.title('Custom Gaussian Process Regression')
-plt.xlabel('Input')
-plt.ylabel('Output')
+plt.plot(range(len(y)), y, 'r.', markersize=10, label='Actual Data (y)')
+plt.plot(range(len(y)), y_pred, 'b-', label='Predicted Data (y_pred)')
+plt.fill_between(range(len(y)), y_pred - sigma, y_pred + sigma, color='blue', alpha=0.2,
+                 label='Confidence Interval (1 std dev)')
+plt.title('Comparison of Actual and Predicted Values')
+plt.xlabel('Time')
+plt.ylabel('Hip Sagittal Angle')
 plt.legend()
 plt.show()
 
-# 학습된 커널 매개변수 출력
-print("Learned kernel parameters:")
-print(f"ExpSineSquaredKernel length_scale: {kernel.k1.length_scale}")
-print(f"ExpSineSquaredKernel periodicity: {kernel.k1.periodicity}")
-print(f"WhiteKernel noise_level: {kernel.k2.noise_level}")
+
+
+
+
+
+
+
+
+
+
 """
-
-
-
-
-
-
-
-
-
-
 
 
 def find_all_indexes(lst, value):
@@ -196,3 +222,4 @@ plt.xlabel('Time')
 plt.ylabel('Hip Sagittal Angle')
 plt.legend()
 plt.show()
+"""
