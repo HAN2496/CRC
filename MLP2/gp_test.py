@@ -36,62 +36,61 @@ class Datasets:
                     # foot_Accel_Y = df_data_imu['foot_Accel_Y'].values
                     # foot_Accel_Z = df_data_imu['foot_Accel_Z'].values
                     HeelStrike = df_target['HeelStrike'].values
+                    header = df_target['Header'].values
+                    heel_strike_speed = np.diff(HeelStrike, prepend=0)
 
                     heel_strike_radians = (HeelStrike / 100.0) * 2 * np.pi
                     heel_strike_x = np.cos(heel_strike_radians)
                     heel_strike_y = np.sin(heel_strike_radians)
 
                     self.data.append({
+                        'header': header,
                         'hip_sagittal': hip_sagittal,
                         'heel_strike_x': heel_strike_x,
                         'heel_strike_y': heel_strike_y,
-                        'HeelStrike': HeelStrike
+                        'heel_strike': HeelStrike,
+                        'heel_strike_speed': heel_strike_speed
                     })
         self.data = np.array(self.data)
-    
-    def index_by_scalar(self, start=0, end=100):
-        random_test_num = np.random.randint(0, len(self.data))
-        entry = self.data[random_test_num]
-        start_idx = np.where(entry['HeelStrike'] == start)[0][0]
-        end_idx = np.where(entry['HeelStrike'] == end)[0][0]
-        selected_data = {
-            'hip_angles': entry['hip_sagittal'][start_idx:end_idx+1],
-            'heel_strike_x': entry['heel_strike_x'][start_idx:end_idx+1],
-            'heel_strike_y': entry['heel_strike_y'][start_idx:end_idx+1],
-            'HeelStrike': entry['HeelStrike'][start_idx:end_idx+1]
-        }
-        return selected_data
-
 
     def divide_by_section(self):
+        self.heel_strike_indices = []
         for entry in self.data:
-            hip_angles = entry['hip_sagittal']
-            heel_strike_indices = self.find_zero_indices(entry['HeelStrike'], 0)
-
-            entry['segments'] = {
-                'initial': {
-                    'hip_angles': hip_angles[heel_strike_indices[0]:heel_strike_indices[1]],
-                    'heel_strike_x': entry['heel_strike_x'][heel_strike_indices[0]:heel_strike_indices[1]],
-                    'heel_strike_y': entry['heel_strike_y'][heel_strike_indices[0]:heel_strike_indices[1]],
-                    'HeelStrike': entry['HeelStrike'][heel_strike_indices[0]:heel_strike_indices[1]]
-                },
-                'mid': {
-                    'hip_angles': hip_angles[heel_strike_indices[2]:heel_strike_indices[-1]],
-                    'heel_strike_x': entry['heel_strike_x'][heel_strike_indices[2]:heel_strike_indices[-1]],
-                    'heel_strike_y': entry['heel_strike_y'][heel_strike_indices[2]:heel_strike_indices[-1]],
-                    'HeelStrike': entry['HeelStrike'][heel_strike_indices[2]:heel_strike_indices[-1]]
-                },
-                'final': {
-                    'hip_angles': hip_angles[heel_strike_indices[-1]:],
-                    'heel_strike_x': entry['heel_strike_x'][heel_strike_indices[-1]:],
-                    'heel_strike_y': entry['heel_strike_y'][heel_strike_indices[-1]:],
-                    'HeelStrike': entry['HeelStrike'][heel_strike_indices[-1]:]
-                }
-            }
+            heel_strike_indices = self.find_zero_indices(entry['heel_strike'], 0)
+            self.heel_strike_indices.append(heel_strike_indices)
 
     @staticmethod
     def find_zero_indices(values_list, target_value):
         return [index for index, value in enumerate(values_list) if value == target_value]
+
+    def index_by_scalar(self, start=0, end=90, index_pos=4):
+        start, end = int(start), int(end)
+        random_test_num = np.random.randint(0, len(self.data))
+        random_test_num = 0
+        entry = self.data[random_test_num]
+        start_idx = self.heel_strike_indices[random_test_num][4]
+        end_idx = self.heel_strike_indices[random_test_num][5] - 1
+
+        heel_strike_indices = self.heel_strike_indices[random_test_num]
+
+        if start < 0:
+            num, val = index_pos-1, 100 + start
+        else:
+            num, val = index_pos, start
+
+        start_idx_within_stride = np.argmin(np.abs(entry['heel_strike'][heel_strike_indices[num]:heel_strike_indices[num+1]] - val))
+        start_idx = heel_strike_indices[num] + start_idx_within_stride
+
+        end_idx_within_stride = np.argmin(np.abs(entry['heel_strike'][heel_strike_indices[4]:heel_strike_indices[5]] - end))
+        end_idx = heel_strike_indices[4] + end_idx_within_stride
+
+        selected_data = {
+            'hip_sagittal': entry['hip_sagittal'][start_idx:end_idx+1],
+            'heel_strike_x': entry['heel_strike_x'][start_idx:end_idx+1],
+            'heel_strike_y': entry['heel_strike_y'][start_idx:end_idx+1],
+            'heel_strike': entry['heel_strike'][start_idx:end_idx+1]
+        }
+        return selected_data
 
 class GP:
     def __init__(self, path="gaussian_process_regressor.joblib"):
@@ -102,7 +101,20 @@ class GP:
     def predict(self, X):
         X = np.array(X)
         y_pred, sigma = self.model.predict(X, return_std=True)
+        self.X = X
         return y_pred, sigma
+
+    def make_heel_strike_val(self, num, start=0, end=100):
+        HeelStrike = np.linspace(start, end, num)
+        heel_strike_radians = (HeelStrike / 100.0) * 2 * np.pi
+        heel_strike_x = np.cos(heel_strike_radians)
+        heel_strike_y = np.sin(heel_strike_radians)
+        X = np.column_stack((heel_strike_x, heel_strike_y))
+        return X
+
+    def predict_by_range(self, num, start=0, end=100):
+        X = self.make_heel_strike_val(num, start, end)
+        return self.predict(X)
 
     def cut_one_cycle(self):
         indices = np.arange(0, 100, 0.05)
@@ -116,7 +128,9 @@ class GP:
         self.y_pred = y_pred
         self.sigma = sigma
 
-    def plot_one_cycle(self):
+    def plot(self, start=0, end=100):
+        X = self.make_heel_strike_val(start, end)
+        y_pred = self.predict_by_range(start, end)
         plt.plot(self.X, self.y_pred)
         plt.fill_between(self.X, self.y_pred - self.sigma, self.y_pred + self.sigma, color='blue', alpha=0.2,
                         label='Confidence Interval (1 std dev)')
@@ -125,26 +139,60 @@ class GP:
         plt.legend()
         plt.show()
 
-start = 30
-end = 100
 dataset = Datasets()
 gp = GP()
 
-selected_data = dataset.index_by_scalar()
-print(selected_data)
+class Control:
+    def __init__(self):
+        self.dataset = Datasets()
+        self.gp = GP()
+    
+    def get_test_datasets(self, start, end):
+        selected_data = dataset.index_by_scalar(start=start, end=end)
+        X = np.column_stack((selected_data['heel_strike_x'], selected_data['heel_strike_y']))
+        y = selected_data['hip_sagittal']
+        return X, y
 
+    def calc_contour_error(self):
+        pass
+
+    def fit(self):
+        pass
+
+"""
+Step 0. 테스트 데이터셋 구축. 0 % ~ 41 % 사이의 데이터가 들어왔다고 가정
+"""
+test_start = 0
+test_end = 41
+selected_data = dataset.index_by_scalar(start=test_start, end=test_end)
 X = np.column_stack((selected_data['heel_strike_x'], selected_data['heel_strike_y']))
-y = selected_data['hip_angles']
+X_scalar =  selected_data['heel_strike']
+y = selected_data['hip_sagittal']
+data_num = len(y)
+header = np.linspace(test_start, test_end, data_num)
 
+"""
+Step 1. gp 파트. 끝 지점을 기준으로 -20 ~ 0 지점의 countour error를 계산
+"""
+interval = 20
+start = test_end - interval
+end = test_end + interval
 
-y_pred, sigma = gp.predict(X)
+y_pred, sigma = gp.predict_by_range(data_num, start, end)
+header_gp = np.linspace(start, end, int(data_num * (end - start) / (test_end - test_start)))
 
+#countouring 계산 및 plot 용 데이터
+compare_data = dataset.index_by_scalar(start=test_start, end=end)
+X_compare = np.column_stack((compare_data['heel_strike_x'], compare_data['heel_strike_y']))
+X_scalar_compare = compare_data['heel_strike']
+y_compare = compare_data['hip_sagittal']
+header_compare = np.linspace(test_start, end, int(data_num * (end - start) / (end - test_start)))
 
-
+#중간 확인
 plt.figure(figsize=(10, 6))
 plt.plot(range(len(y)), y, 'r.', markersize=10, label='Actual Data (y)')
-plt.plot(range(len(y)), y_pred, 'b-', label='Predicted Data (y_pred)')
-plt.fill_between(range(len(y)), y_pred - sigma, y_pred + sigma, color='blue', alpha=0.2,
+plt.plot(range(len(y_pred)), y_pred, 'b-', label='Predicted Data (y_pred)')
+plt.fill_between(range(len(y_pred)), y_pred - sigma, y_pred + sigma, color='blue', alpha=0.2,
                  label='Confidence Interval (1 std dev)')
 plt.title('Comparison of Actual and Predicted Values')
 plt.xlabel('Time')
@@ -152,74 +200,3 @@ plt.ylabel('Hip Sagittal Angle')
 plt.legend()
 plt.show()
 
-
-
-
-
-
-
-
-
-
-
-"""
-
-
-def find_all_indexes(lst, value):
-    return [index for index, current in enumerate(lst) if current == value]
-
-hips, heel_rads, heels = load_data()
-
-data_len = len(hips)
-print(f"Total data length: {data_len}")
-
-hip_starts, hip_mids, hip_ends = [], [], []
-heel_starts, heel_mids, heel_ends = [], [], []
-heel_start_rads, heel_mid_rads, heel_end_rads = [], [], []
-heel_0_idxs, heel_100_idxs = [], []
-
-
-for i in range(data_len):
-    current_hips = hips[i]
-    current_heels = heels[i]
-    current_heel_rads = heel_rads[i]
-    heel_0_idx = find_all_indexes(heels[i], 0)
-    heel_0_idxs.append(heel_0_idx)
-    heel_100_idx = find_all_indexes(heels[i], 100)
-    heel_100_idxs.append(heel_100_idx)
-
-    tmp2 = 3
-    hip_starts.append(current_hips[heel_0_idx[0]:heel_0_idx[tmp2]])
-    heel_starts.append(current_heels[heel_0_idx[0]:heel_0_idx[tmp2]])
-
-    tmp = -3
-    hip_mids.append(current_hips[heel_0_idx[tmp2]:heel_100_idx[tmp]])
-    heel_mids.append(current_heels[heel_0_idx[tmp2]:heel_100_idx[tmp]])
-    heel_mid_rads.append(current_heel_rads[heel_0_idx[tmp2]:heel_100_idx[tmp], :])
-
-    hip_ends.append(current_hips[heel_100_idx[tmp]+1:heel_100_idx[-1]])
-    heel_ends.append(current_heels[heel_100_idx[tmp]+1:heel_100_idx[-1]])
-
-
-#X = heel_mids[0].reshape(-1, 1)
-random_test_num = np.random.randint(0, data_len)
-sliding_pos_i, sliding_pos_f = 300, 600
-X = heel_mid_rads[random_test_num][sliding_pos_i:sliding_pos_f]
-y = hip_mids[random_test_num]
-print(f"x shape: {X.shape}, y shape: {y.shape}")
-
-
-gp = load("gaussian_process_regressor.joblib")
-y_pred, sigma = gp.predict(X, return_std=True)
-
-plt.figure(figsize=(10, 6))
-plt.plot(range(len(y)), y, 'r.', markersize=10, label='Actual Data (y)')
-plt.plot(range(sliding_pos_i, sliding_pos_f), y_pred, 'b-', label='Predicted Data (y_pred)')
-plt.fill_between(range(sliding_pos_i, sliding_pos_f), y_pred - sigma, y_pred + sigma, color='blue', alpha=0.2,
-                 label='Confidence Interval (1 std dev)')
-plt.title('Comparison of Actual and Predicted Values')
-plt.xlabel('Time')
-plt.ylabel('Hip Sagittal Angle')
-plt.legend()
-plt.show()
-"""
