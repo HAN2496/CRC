@@ -131,17 +131,27 @@ class GP:
         if x_scalar in self.X_scalar:
             return self.y_pred[np.where(x_scalar == self.X_scalar)]
         else:
-            interp_func = interp1d(self.X_scalar, self.y_pred, kind='linear', fill_value="extrapolate")
-            return interp_func(x_scalar)
+            closest_indices = np.argsort(np.abs(self.X_scalar - x_scalar))[:2]
+            closest_x_values = self.X_scalar[closest_indices]
+            closest_y_values = self.y_pred[closest_indices]
+            x0, x1 = closest_x_values
+            y0, y1 = closest_y_values
+            interpolated_value = y0 + (y1 - y0) * (x_scalar - x0) / (x1 - x0)
+            return interpolated_value
 
     def translation(self, delx=0, dely=0):
-        self.X_scalar = self.X_scalar - delx
-        self.y_pred = self.y_pred + dely
+        self.X_scalar += delx
+        self.y_pred -= dely
 
-    def scale(self, scale_x=1, scale_y=1):
-        x_scaled = self.X_scalar * scale_x
-        y_pred = self.y_pred * scale_y
-        self.translation(x_scaled[0] - self.X_scalar[0], y_pred[0] - self.y_pred)
+    def scale(self, scale_x=1, scale_y=1, x_pos=0, y_pos=0):
+        self.X_scalar -= x_pos
+        self.y_pred -= y_pos
+
+        self.X_scalar *= scale_x
+        self.y_pred *= scale_y
+
+        self.X_scalar += x_pos
+        self.y_pred += y_pos
 
 dataset = Datasets()
 gp = GP()
@@ -183,9 +193,8 @@ start = test_end - interval
 end = test_end + interval
 
 y_pred, sigma = gp.predict_by_range(data_num, start, end)
-y_pred_target = gp.find_pred_value_by_heelstrike_scalar(X_scalar[0])
-print(y_pred, y_pred_target)
-#gp.translation(delx=0, dely=y_pred_target - y_pred)
+y_pred_target = gp.find_pred_value_by_heelstrike_scalar(X_scalar[-1])
+gp.translation(delx=0, dely=y_pred_target - y[-1])
 header_gp = np.linspace(start, end, int(data_num * (end - start) / (test_end - test_start)))
 
 #countouring 계산 및 plot 용 데이터
@@ -207,3 +216,91 @@ plt.ylabel('Hip Sagittal Angle')
 plt.legend()
 plt.show()
 
+
+
+from scipy.interpolate import interp1d
+from scipy.integrate import simps
+
+def calculate_contour_error(X_actual, y_actual, X_pred, y_pred, interval_end, num_points=500):
+    interval_start = min(X_pred)
+    
+    if interval_start >= interval_end:
+        return 0  # No valid range to calculate error over
+    x_common = np.linspace(interval_start, interval_end, num_points)
+    
+    interpolator_actual = interp1d(X_actual, y_actual, kind='linear', fill_value='extrapolate')
+    y_actual_interpolated = interpolator_actual(x_common)
+
+    interpolator_pred = interp1d(X_pred, y_pred, kind='linear', fill_value='extrapolate')
+    y_pred_interpolated = interpolator_pred(x_common)
+    
+    absolute_difference = np.abs(y_actual_interpolated - y_pred_interpolated)
+    contour_error = simps(absolute_difference, x_common)
+    normalized_contour_error = contour_error / (interval_end - interval_start) * 10
+    
+    return normalized_contour_error
+
+interval_start = test_end - interval
+interval_end = test_end
+contour_error = calculate_contour_error(X_scalar_compare, y_compare, gp.X_scalar, gp.y_pred, interval_end)
+print(f"Contour Error: {contour_error}")
+
+
+
+X_gp_before, y_gp_before = gp.X_scalar.copy(), gp.y_pred.copy()
+plt.plot(X_gp_before, y_gp_before, 'b-', label='Predicted Data (y_pred)')
+plt.plot(gp.X_scalar, gp.y_pred, 'g-', label='Predicted Data (y_pred)')
+plt.show()
+
+def gradient_descent_scale(gp, initial_scale_x, initial_scale_y, learning_rate, num_iterations, X_actual, y_actual, interval_start, interval_end):
+    scale_x = initial_scale_x
+    scale_y = initial_scale_y
+    
+    for iteration in range(num_iterations):
+        gp.scale(scale_x, scale_y, X_actual[-1], y_actual[-1])
+      
+        current_error = calculate_contour_error(X_actual, y_actual, gp.X_scalar, gp.y_pred, interval_end)
+        
+        #print(f"Iteration {iteration+1}, Scale X: {scale_x}, Scale Y: {scale_y}, Error: {current_error}")
+        
+        derv = 1.0 * (1 + 0.01) # 1% 만큼 변화를 줌
+        derv_inv = 1.0 / (1 + 0.01)
+        gp.scale(derv, 1.0, X_actual[-1], y_actual[-1])  # Small perturbation in X scale
+        error_x_perturb = calculate_contour_error(X_actual, y_actual, gp.X_scalar, gp.y_pred, interval_end)
+
+        gp.scale(derv_inv, 1.0, X_actual[-1], y_actual[-1])  # Reset X scale perturbation and apply Y
+        gp.scale(1.0, derv, X_actual[-1], y_actual[-1])  # Small perturbation in Y scale
+        error_y_perturb = calculate_contour_error(X_actual, y_actual, gp.X_scalar, gp.y_pred, interval_end)
+
+        grad_x = (error_x_perturb - current_error) / (0.01 * scale_x)
+        grad_y = (error_y_perturb - current_error) / (0.01 * scale_y)
+        #print(f"grad x: {grad_x}, grad y: {grad_y}")
+        
+        # Update scales
+        scale_x -= learning_rate * grad_x
+        scale_y -= learning_rate * grad_y
+        plt.plot(gp.X_scalar, gp.y_pred, 'g-', label='Predicted Data (y_pred)')
+        plt.show()
+    return scale_x, scale_y
+
+# Parameters
+initial_scale_x = 1.0
+initial_scale_y = 1.0
+learning_rate = 0.0001
+num_iterations = 500
+
+# Assuming `gp`, `X_scalar_compare`, and `y_compare` are defined from previous sections
+optimized_scale_x, optimized_scale_y = gradient_descent_scale(
+    gp, initial_scale_x, initial_scale_y, learning_rate, num_iterations, 
+    X_scalar, y, interval_start, interval_end)
+
+print(f"Optimized Scale X: {optimized_scale_x}, Optimized Scale Y: {optimized_scale_y}")
+
+
+print(X_scalar[-1], y[-1])
+gp.scale(optimized_scale_x, optimized_scale_y, X_scalar[-1], y[-1])
+
+#plt.plot(X_scalar, y, 'r.', markersize=10, label='Actual Data (y)')
+#plt.plot(X_gp_before, y_gp_before, 'b-', label='Predicted Data (y_pred)')
+plt.plot(gp.X_scalar, gp.y_pred, 'g-', label='Predicted Data (y_pred)')
+plt.show()
