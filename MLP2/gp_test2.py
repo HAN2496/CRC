@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 import pandas as pd
 from joblib import dump, load
@@ -6,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from scipy.integrate import simps
 from scipy.interpolate import interp1d
-import time
+from scipy.optimize import minimize
 
 #SUBJECTS = [6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 27, 28, 30] # All subjects
 SUBJECTS = [6, 8]
@@ -155,6 +156,118 @@ class GP:
             self.X_scalar = X_scalar_gp
             self.y_pred = y_pred_gp
 
+class Control:
+    def __init__(self):
+        self._init_datasets()
+        self._init_gp()
+    
+    def _init_datasets(self):
+        self.dataset = Datasets()
+        self.collect_start, self.collect_end = 0, 100
+        self.selected_data = self.dataset.index_by_scalar(start=self.collect_start, end=self.collect_end)
+        self.X = np.column_stack((self.selected_data['heel_strike_x'], self.selected_data['heel_strike_y']))
+        self.X_scalar = self.selected_data['heel_strike']
+        self.y = self.selected_data['hip_sagittal']
+        self.X_scalar_end, self.y_end = self.X_scalar[-1], self.y[-1]
+        self.data_num = len(self.y)
+    
+    def _init_gp(self):
+        self.interval = 20
+        self.predict_start = self.collect_end - self.interval
+        self.predict_end = self.collect_end + self.interval
+
+        # 모델 정의
+        self.gp = GP(data_num=self.data_num)
+
+        y_pred_target = self.gp.find_pred_value_by_scalar(self.X_scalar_end)
+        self.gp.translation(delx=0, dely=y_pred_target - self.y_end) # 테스트 데이터셋의 끝점과 맞춰주기 위해 평행이동
+
+    def calculate_contour_error(self, X_actual, y_actual, X_pred, y_pred, num_points=500):
+        if self.predict_start >= self.collect_end:
+            return 0
+        x_common = np.linspace(self.predict_start + 0.1, self.collect_end - 0.1, num_points)
+        
+        interpolator_actual = interp1d(X_actual, y_actual, kind='linear')
+        y_actual_interp = interpolator_actual(x_common) # actual 값들 공통 x지점으로
+
+        interpolator_pred = interp1d(X_pred, y_pred, kind='linear')
+        y_pred_interp = interpolator_pred(x_common)
+
+        mse = np.mean(np.square((y_actual_interp - y_pred_interp)))
+        return mse
+
+    def gradient_descent_algorithm(self, initial_scale_x, initial_scale_y, learning_rate, num_iterations, data):
+        print_result = 0
+        epsilon = 0.005
+        scale_x = initial_scale_x
+        scale_y = initial_scale_y
+        X_actual, y_actual = data
+        scales_history = []
+
+        for i in range(num_iterations):
+            X_scalar_pred_new, y_pred_new = self.gp.scale(scale_x, scale_y, self.X_scalar_end, self.y_end)
+            contour_error = self.calculate_contour_error(X_actual, y_actual, X_scalar_pred_new, y_pred_new)
+            scales_history.append((scale_x, scale_y, contour_error))
+
+            if print_result % 50 == 0:
+                print(f"Iteration {i}: Contour Error = {contour_error}, Scale_X = {scale_x}, Scale_Y = {scale_y}")
+        
+            X_scalar_pred_new, y_pred_new = self.gp.scale(scale_x + epsilon, scale_y, self.X_scalar_end, self.y_end)
+            error_x_plus = self.calculate_contour_error(X_actual, y_actual, X_scalar_pred_new, y_pred_new)
+            X_scalar_pred_new, y_pred_new = self.gp.scale(scale_x - epsilon, scale_y, self.X_scalar_end, self.y_end)
+            error_x_minus = self.calculate_contour_error(X_actual, y_actual, X_scalar_pred_new, y_pred_new)
+            gradient_x = (error_x_plus - error_x_minus) / (2 * epsilon)
+
+            X_scalar_pred_new, y_pred_new = self.gp.scale(scale_x, scale_y + epsilon, self.X_scalar_end, self.y_end)
+            error_y_plus = self.calculate_contour_error(X_actual, y_actual, X_scalar_pred_new, y_pred_new)
+            X_scalar_pred_new, y_pred_new = self.gp.scale(scale_x, scale_y - epsilon, self.X_scalar_end, self.y_end)
+            error_y_minus = self.calculate_contour_error(X_actual, y_actual, X_scalar_pred_new, y_pred_new)
+            gradient_y = (error_y_plus - error_y_minus) / (2 * epsilon)
+
+            scale_x -= learning_rate * gradient_x
+            scale_y -= learning_rate * gradient_y
+            print_result +=1
+
+        return scale_x, scale_y, scales_history
+
+    def update_frame(self, i, scales_history, X_actual, y_actual, line1, line2, title):
+        scale_x, scale_y, _ = scales_history[i]
+        X_scalar_pred_new, y_pred_new = self.gp.scale(scale_x, scale_y, self.X_scalar_end, self.y_end)
+        line1.set_data(X_actual, y_actual)
+        line2.set_data(X_scalar_pred_new, y_pred_new)
+        title.set_text(f'Iteration {i}: scale_x={scale_x:.2f}, scale_y={scale_y:.2f}')
+        return line1, line2
+
+    def visualize(self, scales_history, frames_interval=10, fps=60):
+        fig, ax = plt.subplots()
+        line1, = ax.plot([], [], 'r.', markersize=10, label='Actual Data')
+        line2, = ax.plot([], [], 'b-', label='Predicted Data')
+        title = ax.set_title('')
+        ax.legend()
+        ax.set_xlim(min(self.X_scalar), max(self.X_scalar) + 20)
+        ax.set_ylim(min(self.y) - 10, max(self.y) + 10)
+
+        frames = range(0, len(scales_history), frames_interval)
+        ani = animation.FuncAnimation(fig, self.update_frame, frames=frames, interval=1, fargs=(scales_history, self.X_scalar, self.y, line1, line2, title))
+
+        writervideo = animation.FFMpegWriter(fps=fps)
+        ani.save('contour_error_animation.mp4', writer=writervideo)
+
+    def plot(self):
+        plt.figure(figsize=(10, 6))
+        plt.plot(X_scalar, y, 'r.', markersize=10, label='Actual Data (y)')
+        plt.plot(gp.X_scalar_original, gp.y_pred_original, 'b-', label="Predicted Data (initial)")
+        plt.plot(gp.X_scalar, gp.y_pred, 'k-', label='After move gp to end point')
+        gp_testx, gp_testy = gp.scale(2.0, 2.0, X_scalar_end, y_end)
+        plt.plot(gp_testx, gp_testy, 'g-', label='size up (twice)')
+        gp_testx, gp_testy = gp.scale(0.5, 0.5, X_scalar_end, y_end)
+        plt.plot(gp_testx, gp_testy, 'y-', label='size down (half)')
+        plt.title('Check translation')
+        plt.xlabel('Time')
+        plt.ylabel('Hip Sagittal Angle')
+        plt.legend()
+        plt.show()
+
 
 plot_process = False
 """
@@ -263,8 +376,8 @@ def gradient_descent_algorithm(initial_scale_x, initial_scale_y, learning_rate, 
         contour_error = calculate_contour_error(X_actual, y_actual, X_scalar_pred_new, y_pred_new)
         scales_history.append((scale_x, scale_y, contour_error))
 
-        # if print_result % 50 == 0:
-        #     print(f"Iteration {i}: Contour Error = {contour_error}, Scale_X = {scale_x}, Scale_Y = {scale_y}")
+        if print_result % 50 == 0:
+            print(f"Iteration {i}: Contour Error = {contour_error}, Scale_X = {scale_x}, Scale_Y = {scale_y}")
     
         X_scalar_pred_new, y_pred_new = gp.scale(scale_x + epsilon, scale_y, X_scalar_end, y_end)
         error_x_plus = calculate_contour_error(X_actual, y_actual, X_scalar_pred_new, y_pred_new)
@@ -287,7 +400,7 @@ def gradient_descent_algorithm(initial_scale_x, initial_scale_y, learning_rate, 
 data = (X_scalar, y)
 #data = (X_scalar_compare, y_compare)
 tic = time.time()
-final_scale_x, final_scale_y, scales_history = gradient_descent_algorithm(1.0, 1.0, 0.001, 5000, data)
+final_scale_x, final_scale_y, scales_history = gradient_descent_algorithm(1.0, 1.0, 0.001, 500, data)
 toc = time.time()
 print("inference time:", toc - tic)
 
@@ -316,5 +429,36 @@ ani = animation.FuncAnimation(fig, update_frame, frames=frames, interval=1, farg
 
 writervideo = animation.FFMpegWriter(fps=60)
 
-ani.save('gradient_descent_plot.gif', writer='imagemagick', fps=30, dpi=100)
+#ani.save('gradient_descent_plot.gif', writer='imagemagick', fps=30, dpi=100)
 #plt.show()
+
+"""
+def optimization_target(scale_params, X_actual, y_actual, X_pred_base, y_pred_base):
+    scale_x, scale_y = scale_params
+    scaled_X_pred = X_pred_base * scale_x
+    scaled_y_pred = y_pred_base * scale_y
+
+    # 실제 데이터와 예측 데이터에 대해 x축의 값이 서로 다를 경우, 보간을 수행
+    common_x = np.linspace(min(X_actual), max(X_actual), len(X_actual))  # 보간할 공통 x축 값 생성
+    interp_actual = interp1d(X_actual, y_actual, kind='linear', fill_value="extrapolate")
+    interp_pred = interp1d(scaled_X_pred, scaled_y_pred, kind='linear', fill_value="extrapolate")
+
+    y_actual_interp = interp_actual(common_x)
+    y_pred_interp = interp_pred(common_x)
+
+    # 계산된 y값들에 대한 MSE 계산
+    mse = np.mean((y_actual_interp - y_pred_interp) ** 2)
+    return mse
+
+
+
+initial_guess = [1, 1]  # 초기 스케일링 인자
+bounds = [(0.1, 2), (0.1, 2)]  # 스케일 인자에 대한 경계
+
+# 최적화 실행
+result = minimize(optimization_target, initial_guess, args=(X, y, X_pred_base, y_pred_base), bounds=bounds, method='L-BFGS-B')
+
+# 최적화 결과 출력
+print("Optimal scaling factors:", result.x)
+print("Minimum MSE:", result.fun)
+"""
