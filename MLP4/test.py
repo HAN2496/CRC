@@ -52,11 +52,17 @@ class Subject:
                     'foot_Accel_Y': foot_Accel_Y,
                     'foot_Accel_Z': foot_Accel_Z
                 })
-        self.data = np.array(data)
+        self.datas = np.array(data)
 
+    def calc_torque(self):
+        for data in self.datas:
+            hip_sagittal = data['hip_sagittal']
+            vel = np.diff(hip_sagittal, prepend=0)
+            acc = np.diff(vel, prepend=0)
+        pass
     def divide_by_section(self): #
         self.heel_strike_indices = []
-        for entry in self.data:
+        for entry in self.datas:
             heel_strike_indices = self.find_zero_indices(entry['heel_strike'], 0)
             self.heel_strike_indices.append(heel_strike_indices)
 
@@ -66,8 +72,8 @@ class Subject:
 
     def extract_by_heelstrike_range(self, start=0, end=90, index_pos=4):
         start, end = int(start), int(end)
-        random_test_num = np.random.randint(0, len(self.data)) #데이터 중 선택
-        entry = self.data[random_test_num]
+        random_test_num = np.random.randint(0, len(self.datas)) #데이터 중 선택
+        entry = self.datas[random_test_num]
 
         heel_strike_indices = self.heel_strike_indices[random_test_num]
     
