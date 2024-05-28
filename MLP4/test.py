@@ -55,6 +55,7 @@ class Subject:
         self.datas = np.array(data)
 
     def calc_torque(self):
+        m = self.info[]
         for data in self.datas:
             hip_sagittal = data['hip_sagittal']
             vel = np.diff(hip_sagittal, prepend=0)
