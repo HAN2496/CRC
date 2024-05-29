@@ -52,6 +52,8 @@ class Subject:
                 df_imu = pd.read_csv(os.path.join(imu_path, filename))
 
                 hip_sagittal = df_gon['hip_sagittal'][::5].values
+                hip_sagittal_speed = np.diff(hip_sagittal, prepend=0)
+                hip_sagittal_acc = np.diff(hip_sagittal_speed, prepend=0)
                 heelstrike = df_heelstrike['HeelStrike'].values
                 header = df_heelstrike['Header'].values
                 heelstrike_speed = np.diff(heelstrike, prepend=0)
@@ -68,6 +70,8 @@ class Subject:
                     'name': filename.split('.')[0],
                     'header': header,
                     'hip_sagittal': hip_sagittal,
+                    'hip_sagittal_speed': hip_sagittal_speed,
+                    'hip_sagittal_acc': hip_sagittal_acc,
                     'heelstrike_x': heelstrike_x,
                     'heelstrike_y': heelstrike_y,
                     'heelstrike': heelstrike,
@@ -83,6 +87,21 @@ class Subject:
         if cut:
             self.datas = self.extract_by_heelstrike_range()
 
+    def move(self, torque_input):
+        m = self.info['Weight'].values
+        l_thigh = self.info['thigh'].values
+        l_calf = self.info['calf'].values
+        m_thigh = m * 0.28
+        m_calf = m * 0.08
+        m_toe = m * 0.05
+        I_thigh = 2/3 * m_thigh * l_thigh
+        I_calf = 2/3 * m_calf * l_calf + m_calf * (l_thigh+l_calf) **2
+        I_toe = m_toe * (l_thigh + l_calf) ** 2
+        I_total = I_thigh + I_calf + I_toe
+        alpha = torque_input / I_total
+        return alpha
+
+
     def calc_torque(self, hip_sagittal):
         m = self.info['Weight'].values
         l_thigh = self.info['thigh'].values
@@ -94,9 +113,9 @@ class Subject:
         I_calf = 2/3 * m_calf * l_calf + m_calf * (l_thigh+l_calf) **2
         I_toe = m_toe * (l_thigh + l_calf) ** 2
         I_total = I_thigh + I_calf + I_toe
-        self.smoothed_data = savgol_filter(hip_sagittal, window_length=5, polyorder=2)  # 스무딩
-        vel = savgol_filter(hip_sagittal, window_length=5, polyorder=2, deriv=1, delta=1.0)  # 속도 (1차 미분)
-        acc = savgol_filter(hip_sagittal, window_length=5, polyorder=2, deriv=2, delta=1.0)  # 가속도 (2차 미분)
+        smoothed_data = savgol_filter(hip_sagittal, window_length=30, polyorder=3)  # 스무딩
+        vel = savgol_filter(hip_sagittal, window_length=30, polyorder=3, deriv=1, delta=1.0)  # 속도 (1차 미분)
+        acc = savgol_filter(hip_sagittal, window_length=30, polyorder=3, deriv=2, delta=1.0)  # 가속도 (2차 미분)
         #vel = np.diff(hip_sagittal, prepend=0) * 200
         #acc = np.diff(vel, prepend=0) * 200
         torque = I_total * acc
@@ -137,6 +156,8 @@ class Subject:
         selected_data = {
             'header': entry['header'][start_idx:end_idx+1],
             'hip_sagittal': entry['hip_sagittal'][start_idx:end_idx+1],
+            'hip_sagittal_speed': entry['hip_sagittal_speed'][start_idx:end_idx+1],
+            'hip_sagittal_acc': entry['hip_sagittal_acc'][start_idx:end_idx+1],
             'heelstrike_x': entry['heelstrike_x'][start_idx:end_idx+1],
             'heelstrike_y': entry['heelstrike_y'][start_idx:end_idx+1],
             'heelstrike': entry['heelstrike'][start_idx:end_idx+1],

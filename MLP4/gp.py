@@ -22,11 +22,11 @@ class GP:
         return y_pred, sigma
 
     def predict_by_scalar(self, num, start=0, end=100): #scalar 값으로 predict 계산시 사용
-        HeelStrike = np.linspace(start, end, num)
+        HeelStrike = self.data['heelstrike']
         self.X_scalar = HeelStrike
         heel_strike_radians = (HeelStrike / 100.0) * 2 * np.pi
-        heel_strike_x = np.cos(heel_strike_radians)
-        heel_strike_y = np.sin(heel_strike_radians)
+        heel_strike_x = self.data['heelstrike_x']
+        heel_strike_y = self.data['heelstrike_y']
         X = np.column_stack((heel_strike_x, heel_strike_y))
         return self.predict(X)
 
@@ -59,5 +59,5 @@ class GP:
         if save_data == False:
             return X_scalar_gp, y_pred_gp
         else:
-            self.X_scalar = X_scalar_gp
+            #self.X_scalar = X_scalar_gp
             self.y_pred = y_pred_gp
