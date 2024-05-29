@@ -2,11 +2,12 @@ import numpy as np
 from joblib import load
 
 class GP:
-    def __init__(self, data_num, path='gaussian_process_regressor.joblib'):
-        self.data_num = data_num
+    def __init__(self, data, path='gaussian_process_regressor.joblib'):
+        self.data = data
+        self.data_num = len(data)
         self.path = path
         self.model = load(self.path)
-        self.predict_by_scalar(data_num)
+        self.predict_by_scalar(self.data_num)
         self.X_original = self.X.copy()
         self.X_scalar_original = self.X_scalar.copy()
         self.y_pred_original = self.y_pred.copy()

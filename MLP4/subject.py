@@ -32,7 +32,8 @@ class Datasets:
 """
 
 class Subject:
-    def __init__(self, number):
+    def __init__(self, number, cut=False):
+        self.cut = cut
         if number not in SUBJECTS:
             raise ValueError("Wrong number")
 
@@ -77,8 +78,10 @@ class Subject:
                     'foot_Accel_Z': foot_Accel_Z
                 })
         self.datas = np.array(data)
+        self.used_data_idx = self.get_random_test_num()
         self.find_walking_start_point()
-        self.cutted_datas = self.extract_by_heelstrike_range()
+        if cut:
+            self.datas = self.extract_by_heelstrike_range()
 
     def calc_torque(self, hip_sagittal):
         m = self.info['Weight'].values
@@ -91,7 +94,7 @@ class Subject:
         I_calf = 2/3 * m_calf * l_calf + m_calf * (l_thigh+l_calf) **2
         I_toe = m_toe * (l_thigh + l_calf) ** 2
         I_total = I_thigh + I_calf + I_toe
-        smoothed_data = savgol_filter(hip_sagittal, window_length=5, polyorder=2)  # 스무딩
+        self.smoothed_data = savgol_filter(hip_sagittal, window_length=5, polyorder=2)  # 스무딩
         vel = savgol_filter(hip_sagittal, window_length=5, polyorder=2, deriv=1, delta=1.0)  # 속도 (1차 미분)
         acc = savgol_filter(hip_sagittal, window_length=5, polyorder=2, deriv=2, delta=1.0)  # 가속도 (2차 미분)
         #vel = np.diff(hip_sagittal, prepend=0) * 200
@@ -109,9 +112,9 @@ class Subject:
     def find_zero_indices(values_list, target_value):
         return [index for index, value in enumerate(values_list) if value == target_value]
 
-    def extract_by_heelstrike_range(self, start=0, end=90, index_pos=4):
+    def extract_by_heelstrike_range(self, start=0, end=100, index_pos=4):
         start, end = int(start), int(end)
-        random_test_num = self.get_random_test_num() #데이터 중 선택
+        random_test_num = self.used_data_idx #데이터 중 선택
         entry = self.datas[random_test_num]
 
         heel_strike_indices = self.heel_strike_indices[random_test_num]
@@ -136,7 +139,8 @@ class Subject:
             'hip_sagittal': entry['hip_sagittal'][start_idx:end_idx+1],
             'heelstrike_x': entry['heelstrike_x'][start_idx:end_idx+1],
             'heelstrike_y': entry['heelstrike_y'][start_idx:end_idx+1],
-            'heelstrike': entry['heelstrike'][start_idx:end_idx+1]
+            'heelstrike': entry['heelstrike'][start_idx:end_idx+1],
+            'torque': entry['torque'][start_idx:end_idx+1]
         }
         return selected_data
 
@@ -144,16 +148,23 @@ class Subject:
         return np.random.randint(0, len(self.datas)) #데이터 중 선택
 
     def plot(self, num=0, show=True):
-        random_test_num = self.get_random_test_num()
         plt.figure(figsize=(10, 6))
-        plt.plot(self.datas[random_test_num]['header'], self.datas[random_test_num]['hip_sagittal'], label=f"{random_test_num} subject")
-        for y_val in self.heel_strike_indices[random_test_num]:
-            plt.axvline(self.datas[random_test_num]['header'][y_val])
-        plt.plot(self.cutted_datas['header'], self.cutted_datas['hip_sagittal'])
+        #plt.plot(self.datas[self.used_data_idx]['header'], self.datas[self.used_data_idx]['hip_sagittal'], label='hip sagittal')
+        plt.plot(self.datas['header'], self.datas['hip_sagittal'], label='hip sagittal')
+        #plt.plot(self.cutted_datas['header'], self.cutted_datas['hip_sagittal'])
+        ax2 = plt.gca().twinx()
+        #ax2.plot(self.datas[self.used_data_idx]['header'], self.datas[self.used_data_idx]['torque'], label='torque', color='red')
+        ax2.plot(self.datas['header'], self.datas['torque'], label='torque', color='red')
+
+        #for y_val in self.heel_strike_indices[self.used_data_idx]:
+        #    plt.axvline(self.datas[self.used_data_idx]['header'][y_val])
+
         if show:
-            plt.title(f'Original dataset for subject {random_test_num}')
+            plt.title(f'Original dataset for subject')
+            plt.legend()
+            ax2.legend(loc='upper right')
             plt.show()
 
 if __name__ == "__main__":
-    subject = Subject(6)
+    subject = Subject(6, cut=True)
     subject.plot()
