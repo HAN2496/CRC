@@ -275,7 +275,7 @@ Step 0. 테스트 데이터셋 구축. 0 % ~ 41 % 사이의 데이터가 들어�
 """
 dataset = Datasets()
 collect_start = 0 # 맨 처음값부터 사용
-collect_end = 41
+collect_end = 50
 selected_data = dataset.index_by_scalar(start=collect_start, end=collect_end)
 X = np.column_stack((selected_data['heel_strike_x'], selected_data['heel_strike_y']))
 X_scalar =  selected_data['heel_strike']
@@ -286,7 +286,7 @@ data_num = len(y)
 """
 Step 1. gp 파트. 끝 지점을 기준으로 -20 % ~ +20 % 지점을 정의해줌.
 """
-interval = 20
+interval = 45
 predict_start = collect_end - interval
 predict_end = collect_end + interval
 
@@ -301,10 +301,10 @@ if plot_process:
     plt.plot(X_scalar, y, 'r.', markersize=10, label='Actual Data (y)')
     plt.plot(gp.X_scalar_original, gp.y_pred_original, 'b-', label="Predicted Data (initial)")
     plt.plot(gp.X_scalar, gp.y_pred, 'k-', label='After move gp to end point')
-    gp_testx, gp_testy = gp.scale(2.0, 2.0, X_scalar_end, y_end)
-    plt.plot(gp_testx, gp_testy, 'g-', label='size up (twice)')
-    gp_testx, gp_testy = gp.scale(0.5, 0.5, X_scalar_end, y_end)
-    plt.plot(gp_testx, gp_testy, 'y-', label='size down (half)')
+    #gp_testx, gp_testy = gp.scale(2.0, 2.0, X_scalar_end, y_end)
+    #plt.plot(gp_testx, gp_testy, 'g-', label='size up (twice)')
+    #gp_testx, gp_testy = gp.scale(0.5, 0.5, X_scalar_end, y_end)
+    #plt.plot(gp_testx, gp_testy, 'y-', label='size down (half)')
     plt.title('Check translation')
     plt.xlabel('Time')
     plt.ylabel('Hip Sagittal Angle')
@@ -407,30 +407,33 @@ print("inference time:", toc - tic)
 """
 Step 4: 시각화
 """
-def update_frame(i, scales_history, X_actual, y_actual, line1, line2, title):
+def update_frame(i, scales_history, X_actual, y_actual, line1, line2, line3, title):
     scale_x, scale_y, _ = scales_history[i]
     X_scalar_pred_new, y_pred_new = gp.scale(scale_x, scale_y, X_scalar_end, y_end)
+    X_scalar_pred_new2, y_pred_new2 = gp.scale(1.0, 1.0, X_scalar_end, y_end)
     line1.set_data(X_actual, y_actual)
     line2.set_data(X_scalar_pred_new, y_pred_new)
+    line3.set_data(X_scalar_pred_new2, y_pred_new2)
     title.set_text(f'Iteration {i}: scale_x={scale_x:.2f}, scale_y={scale_y:.2f}')
     return line1, line2
 
 fig, ax = plt.subplots()
 line1, = ax.plot([], [], 'r.', markersize=10, label='Actual Data')
 line2, = ax.plot([], [], 'b-', label='Predicted Data')
+line3, = ax.plot([], [], 'g-', label='Initial GP Data')
 title = ax.set_title('')
 ax.legend()
-ax.set_xlim(min(X_scalar), max(X_scalar)+20)
+ax.set_xlim(min(X_scalar), 100)
 ax.set_ylim(min(y) - 10, max(y) + 10)
 
 #interval이 속도 결정하는듯. 작을수록 빠름
-frames=range(0, len(scales_history), 10) #<- 이렇게 하면 2개씩만
-ani = animation.FuncAnimation(fig, update_frame, frames=frames, interval=1, fargs=(scales_history, X_scalar, y, line1, line2, title))
+frames=range(0, len(scales_history), 1) #<- 이렇게 하면 2개씩만
+ani = animation.FuncAnimation(fig, update_frame, frames=frames, interval=2, fargs=(scales_history, X_scalar, y, line1, line2, line3, title))
 
 writervideo = animation.FFMpegWriter(fps=60)
 
-#ani.save('gradient_descent_plot.gif', writer='imagemagick', fps=30, dpi=100)
-#plt.show()
+ani.save('gradient_descent_plot.gif', writer='imagemagick', fps=30, dpi=100)
+plt.show()
 
 """
 def optimization_target(scale_params, X_actual, y_actual, X_pred_base, y_pred_base):

@@ -7,7 +7,7 @@ class GP:
         self.data_num = len(data)
         self.path = path
         self.model = load(self.path)
-        self.predict_by_scalar(self.data_num)
+        self.predict_by_scalar()
         self.X_original = self.X.copy()
         self.X_scalar_original = self.X_scalar.copy()
         self.y_pred_original = self.y_pred.copy()
@@ -21,10 +21,10 @@ class GP:
 
         return y_pred, sigma
 
-    def predict_by_scalar(self, num, start=0, end=100): #scalar 값으로 predict 계산시 사용
+    def predict_by_scalar(self, start=0, end=100): #scalar 값으로 predict 계산시 사용
         HeelStrike = self.data['heelstrike']
         self.X_scalar = HeelStrike
-        heel_strike_radians = (HeelStrike / 100.0) * 2 * np.pi
+        #heel_strike_radians = (HeelStrike / 100.0) * 2 * np.pi
         heel_strike_x = self.data['heelstrike_x']
         heel_strike_y = self.data['heelstrike_y']
         X = np.column_stack((heel_strike_x, heel_strike_y))

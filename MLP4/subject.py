@@ -86,6 +86,10 @@ class Subject:
         self.find_walking_start_point()
         if cut:
             self.datas = self.extract_by_heelstrike_range()
+        pos, vel, acc = self.calc_torque(self.datas['hip_sagittal'], extract=True)
+        self.datas['hip_sagittal'] = pos
+        self.datas['hip_sagittal_speed'] = vel
+        self.datas['hip_sagittal_acc'] = acc
 
     def move(self, torque_input):
         m = self.info['Weight'].values
@@ -102,7 +106,7 @@ class Subject:
         return alpha
 
 
-    def calc_torque(self, hip_sagittal):
+    def calc_torque(self, hip_sagittal, extract=False):
         m = self.info['Weight'].values
         l_thigh = self.info['thigh'].values
         l_calf = self.info['calf'].values
@@ -113,13 +117,19 @@ class Subject:
         I_calf = 2/3 * m_calf * l_calf + m_calf * (l_thigh+l_calf) **2
         I_toe = m_toe * (l_thigh + l_calf) ** 2
         I_total = I_thigh + I_calf + I_toe
-        smoothed_data = savgol_filter(hip_sagittal, window_length=30, polyorder=3)  # 스무딩
-        vel = savgol_filter(hip_sagittal, window_length=30, polyorder=3, deriv=1, delta=1.0)  # 속도 (1차 미분)
-        acc = savgol_filter(hip_sagittal, window_length=30, polyorder=3, deriv=2, delta=1.0)  # 가속도 (2차 미분)
-        #vel = np.diff(hip_sagittal, prepend=0) * 200
-        #acc = np.diff(vel, prepend=0) * 200
-        torque = I_total * acc
-        return torque
+        pos = savgol_filter(hip_sagittal, window_length=30, polyorder=3)  # 스무딩
+        # vel = savgol_filter(hip_sagittal, window_length=30, polyorder=3, deriv=1, delta=1.0)  # 속도 (1차 미분)
+        # acc = savgol_filter(hip_sagittal, window_length=30, polyorder=3, deriv=2, delta=1.0)  # 가속도 (2차 미분)
+        vel = np.diff(pos, prepend=0) / 0.005
+        vel[0] = 0
+        acc = np.diff(vel, prepend=0) / 0.005
+        acc[0] = 0
+        acc[1] = 0
+        if extract:
+            return pos, vel, acc
+        else:
+            torque = I_total * acc
+            return torque
 
     def find_walking_start_point(self): #
         self.heel_strike_indices = []
@@ -139,29 +149,30 @@ class Subject:
         heel_strike_indices = self.heel_strike_indices[random_test_num]
     
         start_idx = heel_strike_indices[index_pos]
-        end_idx = heel_strike_indices[index_pos] - 1
+        end_idx = heel_strike_indices[index_pos + 3]
 
 
-        if start < 0:
-            num, val = index_pos-1, 100 + start
-        else:
-            num, val = index_pos, start
+        # if start < 0:
+        #     num, val = index_pos-1, 100 + start
+        # else:
+        #     num, val = index_pos, start
+        # interval = 3
+        # start_idx_within_stride = np.argmin(np.abs(entry['heelstrike'][heel_strike_indices[num]:heel_strike_indices[num+interval]] - val))
+        # start_idx = heel_strike_indices[num] + start_idx_within_stride
 
-        start_idx_within_stride = np.argmin(np.abs(entry['heelstrike'][heel_strike_indices[num]:heel_strike_indices[num+1]] - val))
-        start_idx = heel_strike_indices[num] + start_idx_within_stride
+        # end_idx_within_stride = np.argmin(np.abs(entry['heelstrike'][heel_strike_indices[num]:heel_strike_indices[num+interval]] - end))
+        # end_idx = heel_strike_indices[num] + end_idx_within_stride
 
-        end_idx_within_stride = np.argmin(np.abs(entry['heelstrike'][heel_strike_indices[4]:heel_strike_indices[5]] - end))
-        end_idx = heel_strike_indices[4] + end_idx_within_stride
 
         selected_data = {
-            'header': entry['header'][start_idx:end_idx+1],
-            'hip_sagittal': entry['hip_sagittal'][start_idx:end_idx+1],
-            'hip_sagittal_speed': entry['hip_sagittal_speed'][start_idx:end_idx+1],
-            'hip_sagittal_acc': entry['hip_sagittal_acc'][start_idx:end_idx+1],
-            'heelstrike_x': entry['heelstrike_x'][start_idx:end_idx+1],
-            'heelstrike_y': entry['heelstrike_y'][start_idx:end_idx+1],
-            'heelstrike': entry['heelstrike'][start_idx:end_idx+1],
-            'torque': entry['torque'][start_idx:end_idx+1]
+            'header': entry['header'][start_idx:end_idx],
+            'hip_sagittal': entry['hip_sagittal'][start_idx:end_idx],
+            'hip_sagittal_speed': entry['hip_sagittal_speed'][start_idx:end_idx],
+            'hip_sagittal_acc': entry['hip_sagittal_acc'][start_idx:end_idx],
+            'heelstrike_x': entry['heelstrike_x'][start_idx:end_idx],
+            'heelstrike_y': entry['heelstrike_y'][start_idx:end_idx],
+            'heelstrike': entry['heelstrike'][start_idx:end_idx],
+            'torque': entry['torque'][start_idx:end_idx]
         }
         return selected_data
 
@@ -172,6 +183,8 @@ class Subject:
         plt.figure(figsize=(10, 6))
         #plt.plot(self.datas[self.used_data_idx]['header'], self.datas[self.used_data_idx]['hip_sagittal'], label='hip sagittal')
         plt.plot(self.datas['header'], self.datas['hip_sagittal'], label='hip sagittal')
+        #plt.plot(self.datas['header'], self.smoothed_data, label='smoothed')
+        
         #plt.plot(self.cutted_datas['header'], self.cutted_datas['hip_sagittal'])
         ax2 = plt.gca().twinx()
         #ax2.plot(self.datas[self.used_data_idx]['header'], self.datas[self.used_data_idx]['torque'], label='torque', color='red')
