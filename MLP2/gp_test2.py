@@ -269,13 +269,13 @@ class Control:
         plt.show()
 
 
-plot_process = False
+plot_process = True
 """
 Step 0. 테스트 데이터셋 구축. 0 % ~ 41 % 사이의 데이터가 들어왔다고 가정
 """
 dataset = Datasets()
 collect_start = 0 # 맨 처음값부터 사용
-collect_end = 50
+collect_end = 40
 selected_data = dataset.index_by_scalar(start=collect_start, end=collect_end)
 X = np.column_stack((selected_data['heel_strike_x'], selected_data['heel_strike_y']))
 X_scalar =  selected_data['heel_strike']
@@ -301,10 +301,14 @@ if plot_process:
     plt.plot(X_scalar, y, 'r.', markersize=10, label='Actual Data (y)')
     plt.plot(gp.X_scalar_original, gp.y_pred_original, 'b-', label="Predicted Data (initial)")
     plt.plot(gp.X_scalar, gp.y_pred, 'k-', label='After move gp to end point')
-    #gp_testx, gp_testy = gp.scale(2.0, 2.0, X_scalar_end, y_end)
-    #plt.plot(gp_testx, gp_testy, 'g-', label='size up (twice)')
-    #gp_testx, gp_testy = gp.scale(0.5, 0.5, X_scalar_end, y_end)
-    #plt.plot(gp_testx, gp_testy, 'y-', label='size down (half)')
+    gp_testx, gp_testy = gp.scale(1.0, 2.0, 0, y_end)
+    plt.plot(gp_testx, gp_testy, 'g-', label='size up (twice)')
+    gp_testx, gp_testy = gp.scale(0.5, 0.5, X_scalar_end, y_end)
+    plt.plot(gp_testx, gp_testy, 'y-', label='size down (half)')
+    gp_testx, gp_testy = gp.scale(0.5, 0.5, 0, y_end)
+    plt.plot(gp_testx, gp_testy, 'k-', label='fuk')
+    gp_testx, gp_testy = gp.scale(0.5, 0.5, 0, 0)
+    plt.plot(gp_testx, gp_testy, 'k-', label='fuk2')
     plt.title('Check translation')
     plt.xlabel('Time')
     plt.ylabel('Hip Sagittal Angle')
