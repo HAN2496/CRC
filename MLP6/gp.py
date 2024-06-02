@@ -1,6 +1,7 @@
 import numpy as np
 from joblib import load
 from subject import Subject
+import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 
 class GP:
@@ -64,7 +65,7 @@ class GP:
         self.y_pred = self.predict(X)
 
 
-    def scale(self, scale_x=1, scale_y=1, x_pos=0, y_pos=0, save_data=False, idx=-1):
+    def scale(self, scale_x=1.0, scale_y=1.0, x_pos=0, y_pos=0, save_data=False, idx=-1):
         X_scalar_gp = self.X_scalar - x_pos
         y_pred_gp = self.y_pred - y_pos
 
@@ -74,11 +75,20 @@ class GP:
         X_scalar_gp += x_pos
         y_pred_gp += y_pos
 
-    
-        print(X_scalar_gp) 
-        interpolator_pred = interp1d(X_scalar_gp, y_pred_gp, kind='linear', bounds_error=False, fill_value="extrapolate")
-        y_pred_gp = interpolator_pred(self.X_scalar)
-        X_scalar_gp = self.X_scalar
+        if scale_x != 1.0:
+            cutted_datas = []
+            interpolated_y = []
+            for section in self.data['total_sections']:
+                idxs = self.data.sections(section, index=True)
+                cutted_datas.append([X_scalar_gp[idxs], y_pred_gp[idxs], self.X_scalar[idxs]])
+            for x, y, original in cutted_datas:
+                interpolator = interp1d(x, y, kind='linear', bounds_error=False, fill_value="extrapolate")
+                y_pred = interpolator(original)
+                interpolated_y.extend(y_pred)
+            y_pred_gp = np.array(interpolated_y)
+            if idx != -1:
+                y_diff = y_pos - y_pred_gp[idx-1]
+                y_pred_gp = y_pred_gp - y_diff
 
         if save_data == False:
             if idx != -1:

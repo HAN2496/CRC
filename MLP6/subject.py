@@ -64,13 +64,16 @@ class Subject:
                 })
         self.datas = np.array(data)
         self.used_data_idx = self.get_random_test_num()
+        self.used_data_idx = 1
         self.find_start_index()
         if cut:
-            self.datas = self.cut_data()
+            self.datas, section = self.cut_data(interval=3)
         pos, vel, acc = self.calc_torque(self.datas['hip_sagittal'], extract=True)
         self.datas['hip_sagittal'] = pos
         self.datas['hip_sagittal_speed'] = vel
         self.datas['hip_sagittal_acc'] = acc
+        self.datas = Datasets(self.datas)
+        self.datas.append("total_sections", [i for i in range(section)])
 
     def move(self, torque_input):
         m = self.info['Weight'].values
@@ -149,7 +152,7 @@ class Subject:
             'heelstrike': entry['heelstrike'][start_idx:end_idx],
             'torque': entry['torque'][start_idx:end_idx]
         }
-        return selected_data
+        return selected_data, section
 
     def get_random_test_num(self):
         return np.random.randint(0, len(self.datas)) #데이터 중 선택
@@ -176,4 +179,5 @@ class Subject:
 
 if __name__ == "__main__":
     subject = Subject(6, cut=True)
+    print(subject.datas['section'])
     subject.plot()

@@ -19,6 +19,9 @@ class Datasets:
             }
         self.additional_datas = {}
 
+    def __len__(self):
+        return len(self.datas['section']) 
+
     def __str__(self):
         summary_dict = {key: values for key, values in self.datas.items()}
         additional_summary = {key: len(values) for key, values in self.additional_datas.items()}
@@ -50,6 +53,20 @@ class Datasets:
         for key, value in data.items():
             self.append(key, value)
 
+    def sections(self, section, index=False):
+        indices = [i for i, sec in enumerate(self.datas['section']) if sec == section]
+        if not indices:
+            return None
+        if index:
+            return indices
+        filtered_data = {}
+        for key in self.datas:
+            if all(i < len(self.datas[key]) for i in indices):
+                filtered_data[key] = [self.datas[key][i] for i in indices if key != "section"]
+            else:
+                filtered_data[key] = None
+        return filtered_data
+
     def index(self, key, idx):
         data = self.__getitem__(key)
         if isinstance(idx, list):
@@ -69,10 +86,14 @@ class Datasets:
 class Test:
     def __init__(self):
         self.data = Datasets()
-        self.data.appends({'test': 0})
-        self.data.append('test', 1)
-        self.data.index('test', 0)
+        self.data.appends({'section': [1, 1, 2, 2], 'header': [10, 20, 30, 40], 'hip_sagittal': [100, 200, 300, 400]
+                           , 'total_sections': [0, 1, 2]})
         print(self.data)
-        print(self.data['test'][0])
+        print("="*50)
+        print(self.data['header'])
+        print(self.data.sections(1))
+        print(self.data.sections(2, index=True))
+        print(self.data.sections(3))
 
-#test = Test()
+if __name__ == "__main":
+    test = Test()
