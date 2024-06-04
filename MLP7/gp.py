@@ -28,7 +28,7 @@ class GP:
             self.sigma_original = self.sigma.copy()
         return y_pred, sigma
 
-    def _init(self, times, heelstrikes, heelstrike_x, heelstrike_y): #scalar 값으로 predict 계산시 사용
+    def _init(self, times, heelstrikes, heelstrike_x, heelstrike_y):
         self.times = times
         HeelStrike =heelstrikes
         self.X_scalar = HeelStrike
