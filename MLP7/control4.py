@@ -1,20 +1,22 @@
 import os
-import pandas as pd
 import numpy as np
-from subject import Subject
+#from subject import Subject
+from subject2 import Subject
 from gp import GP
 from matplotlib import pyplot as plt
 from datasets import Datasets
 from scipy.optimize import minimize
 import imageio
-from matplotlib import animation
-# import matplotlib
-# matplotlib.use('Agg')
+from scipy.signal import savgol_filter
+import matplotlib
+matplotlib.use('Agg')
 
 class Control:
     def __init__(self):
-        self.subject = Subject(6, cut=True)
+        #self.subject = Subject(6, cut=True)
+        self.subject = Subject()
         self.gp = GP(self.subject)
+        self.gp_original = GP(self.subject)
         self.original_datas = self.subject.datas
         self.dt = self.original_datas['header'][1] - self.original_datas['header'][0]
         self.total_data_num = len(self.original_datas['header'])
@@ -22,16 +24,28 @@ class Control:
         self.original_datas.appends({'start_indices': self.subject.start_indices})
         self.corrected_datas = Datasets()
 
-        self.Kp = 0
+        self.Kp = 500
         self.Ki = 0
-        self.Kd = 0
+        self.Kd = 150
         self.learning_rate = 0.001
         self.num_iterations = 201
 
     def control(self):
         one_more = True
+        save_data = False
+        if save_data:
+            unchange_datas = {
+                "original subject": [],
+                "corrected subject": [],
+                "original gp": []
+            }
+            change_datas = {
+                "corrected subject": [],
+                "scaled gp": []
+            }
+        pass_high = 0
         idx = 0
-        interval_predict = 10
+        interval_predict = 1
         filenames = []
         i_error = 0
         d_error = 0
@@ -44,13 +58,26 @@ class Control:
                     self.corrected_datas.appends(self.original_datas.indexs(idx))
                     idx += 1
                     one_more = False
+                    self.gp_original._init(self.original_datas['header'], self.original_datas['heelstrike'],
+                                  self.original_datas['heelstrike_x'], self.original_datas['heelstrike_y'])
                     self.gp._init(self.original_datas['header'][:idx], self.original_datas['heelstrike'][:idx],
                                   self.original_datas['heelstrike_x'][:idx], self.original_datas['heelstrike_y'][:idx])
+                    if save_data:
+                        unchange_datas['original_subject'] = np.array([self.original_datas.datas])
+                        unchange_datas['original_gp'] = np.array([
+                            [self.gp_original.X_time_original],
+                            [self.gp_original.y_pred_original]
+                        ])
+                    continue
+                if pass_high < 42:
+                    self.corrected_datas.appends(self.original_datas.indexs(idx))
+                    idx += 1
+                    pass_high += 1
                     continue
                 print(f"Now idx: {idx} (total: {self.total_data_num})")
 
                 x_scale, y_scale = self.minimize_scale(idx)
-                print(f"x scale: {x_scale} / y scale: {y_scale}")
+                #print(f"x scale: {x_scale} / y scale: {y_scale}")
 
         
                 X_pred_gp, y_pred_gp = self.gp.scale(self.corrected_datas['heelstrike'][-1], x_scale, y_scale,
@@ -62,19 +89,32 @@ class Control:
                 v_t = self.corrected_datas['hip_sagittal_speed'][-1]
                 x_t = self.corrected_datas['hip_sagittal'][-1]
 
+                i_error = 0
+                error_before = 0
                 for i in range(interval_predict):
                     error =  y_pred_gp[i+1] - self.corrected_datas['hip_sagittal'][-1]
-                    d_error = error / self.dt
+                    d_error = (error-error_before) / self.dt
                     i_error += error * self.dt
                     total_error =  self.Kp * error + self.Kd * d_error + self.Ki * i_error
-                    torque_input = total_error + torque_subject[i] * 0.5
+                    torque_input = total_error + torque_subject[i]
 
-                    # print(f"error: {error}, subject torque: {torque_subject[i]}, torque_input: {torque_input}" )
+                    #print('idx:', idx)
+                    #print(f"error: {error}, subject torque: {torque_subject[i]}, torque_input: {torque_input}" )
+                    a_subject = self.original_datas['hip_sagittal_acc'][idx]
 
-                    a_t = self.subject.move(torque_input=torque_input)[0]
+                    #a_t = self.subject.move(torque_input=torque_input)[0]
+                    a_t = a_subject + total_error
                     a_t1 = a_t
                     v_t1 = v_t + a_t * self.dt
                     x_t1 = x_t + v_t1 * self.dt + 0.5 * a_t * self.dt ** 2
+                    #print(f'check move func: original " {round(a_subject, 3)} / move: {self.subject.move(torque_subject[i])[0]}')
+
+                    # data = np.concatenate(np.array(self.corrected_datas['hip_sagittal']), np.array([x_t1]))
+                    # smoothed_x_t1 = savgol_filter(data, window_length=5, polyorder=2)[-1]
+
+
+                    #print(round(a_t, 3), round(v_t1, 3), round(x_t1, 3))
+                    #print(round(v_t, 3), round(x_t, 3))
 
                     # a_t1 = (a_t + a_t_prev) / 2
                     # v_t1 = v_t + a_t1 * self.dt
@@ -82,19 +122,20 @@ class Control:
 
 
                     plt.figure(figsize=(15, 10))
-                    plt.ylim([-30, 30])
+                    plt.plot(self.gp_original.X_time_original, self.gp_original.y_pred_original, label='original gp line')
                     plt.plot(self.original_datas['header'], self.original_datas['hip_sagittal'],  color='green', label='original subject')
                     plt.plot(self.corrected_datas['header'], self.corrected_datas['hip_sagittal'], marker='.', linestyle='', color='k', label='corrected subject')
                     X_pred_gp, y_pred_gp = self.gp.scale(self.corrected_datas['heelstrike'][-1], x_scale, y_scale, self.corrected_datas['header'][-1])
-                    plt.plot(X_pred_gp, y_pred_gp, color='blue', label='gp before')
-                    plt.text(self.corrected_datas['header'][-1]+0.5, self.corrected_datas['hip_sagittal'][-1], error)
-                    plt.text(self.corrected_datas['header'][-1]+0.5, self.corrected_datas['hip_sagittal'][-1] - 1, total_error)
-                    plt.text(self.corrected_datas['header'][-1]+0.5, self.corrected_datas['hip_sagittal'][-1] - 2, torque_subject[i])
+                    plt.plot(X_pred_gp, y_pred_gp, color='blue', label='gp line for scaling')
+
+                    # plt.text(self.corrected_datas['header'][-1]+0.5, self.corrected_datas['hip_sagittal'][-1], error)
+                    # plt.text(self.corrected_datas['header'][-1]+0.5, self.corrected_datas['hip_sagittal'][-1] - 1, total_error)
+                    # plt.text(self.corrected_datas['header'][-1]+0.5, self.corrected_datas['hip_sagittal'][-1] - 2, torque_subject[i])
                     half_len = int(len(tmp_y))
                     if i <= 1:
-                        plt.plot(tmp_x[:half_len], tmp_y[:half_len], color='red', label='gp after')
+                        plt.plot(tmp_x[:half_len], tmp_y[:half_len], color='red', label='gp line for reference')
                     else:
-                        plt.plot(tmp_x[:half_len], tmp_y[:half_len], color='red', marker='.', linestyle='', label='gp after')
+                        plt.plot(tmp_x[:half_len], tmp_y[:half_len], color='red', marker='.', linestyle='', label='gp line for reference')
                     plt.legend()
                     filename = f"tmp/{idx}.png"
                     filenames.append(filename)
@@ -116,6 +157,7 @@ class Control:
                     x_t = x_t1
                     v_t = v_t1
                     a_t_prev = a_t
+                    error_before = error
 
                     idx += 1
 
@@ -123,18 +165,19 @@ class Control:
         print('now gif will save ...')
         existing_gif_count = sum(1 for file in os.listdir("image/") if file.startswith("output") and file.endswith(".gif"))
         next_gif_number = existing_gif_count + 1
-        exportname = f"image/output{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}.gif"
+        exportname = f"image/output{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}"
         duration_rate = 1
         for filename in filenames:
             if filename.endswith(".png"):
                 frames.append(imageio.imread(filename))
-        imageio.mimsave(exportname, frames, format='GIF', duration=duration_rate)
-        print(exportname, filenames[-1])
-        # plt.savefig(exportname, filenames[-1])
+        imageio.mimsave(f"{exportname}.gif", frames, format='GIF', duration=duration_rate)
+        plt.savefig(filenames[-1])
 
         # for filename in set(filenames):
         #     os.remove(filename)
         print('gif saved.')
+        if save_data:
+            unchange_datas['corrected subject'] = self.corrected_datas.datas
 
     def minimize_scale(self, idx):
         def objective(params, X, y_actual, heelstrike, interval=0):

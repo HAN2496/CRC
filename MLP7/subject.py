@@ -70,7 +70,7 @@ class Subject:
         self.used_data_idx = 1
         self.find_start_index()
         if cut:
-            self.datas, section = self.cut_data(interval=7)
+            self.datas, section = self.cut_data(interval=4)
         pos, vel, acc = self.calc_torque(self.datas['hip_sagittal'], extract=True)
         self.datas['hip_sagittal'] = pos
         self.datas['hip_sagittal_speed'] = vel
@@ -163,12 +163,17 @@ class Subject:
         plt.figure(figsize=(10, 6))
         #plt.plot(self.datas['header'], self.datas['hip_sagittal'], label='hip sagittal')
         #plt.plot(self.datas['header'], self.datas['hip_sagittal_speed'], label='hip sagittal')
-        plt.plot(self.datas['header'], self.datas['hip_sagittal_acc'], label='hip sagittal acc')
-        
+        plt.plot(self.datas['header'][5:], self.datas['hip_sagittal_acc'][5:], color='black', label='hip sagittal acc')
+        torque = self.datas['torque'] * 0.5
+        alpha = self.move(torque)
+        plt.plot(self.datas['header'][5:], alpha[5:], color='green')
         #plt.plot(self.cutted_datas['header'], self.cutted_datas['hip_sagittal'])
-        ax2 = plt.gca().twinx()
+        #ax2 = plt.gca().twinx()
         #ax2.plot(self.datas[self.used_data_idx]['header'], self.datas[self.used_data_idx]['torque'], label='torque', color='red')
-        ax2.plot(self.datas['header'], self.datas['torque'], label='torque', color='red')
+        #ax2.plot(self.datas['header'], self.datas['torque'], label='torque', color='red')
+        #ax2.plot(self.datas['header'], self.datas['torque'] * 0.5, label='torque', color='black')
+
+
 
         for y_val in self.start_indices:
             plt.axvline(self.datas['header'][y_val], linestyle='--')
@@ -176,7 +181,7 @@ class Subject:
         if show:
             plt.title(f'Original dataset for subject')
             plt.legend()
-            ax2.legend(loc='upper right')
+            #ax2.legend(loc='upper right')
             plt.show()
 
 if __name__ == "__main__":
