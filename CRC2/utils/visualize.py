@@ -74,7 +74,7 @@ def visualize_predictions(model, X_test, y_test, n_samples=6, input_window_lengt
     plt.savefig('results/estimation_visualization.png', format='png', dpi=300)
     plt.show()
 
-def visualize_gp(original_datasets, gp):
+def visualize_reference_trajectory(original_datasets, gp):
     plt.figure(figsize=(12, 8))
     plt.plot(original_datasets['header'], original_datasets['hip_sagittal'], label='Actual Data (y)')
     plt.plot(original_datasets['header'], gp.y_pred, label='Predicted Data (y_pred)')

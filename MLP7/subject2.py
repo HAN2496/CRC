@@ -29,7 +29,7 @@ class Subject:
         hip_sagittal_speed = np.diff(hip_sagittal, prepend=0) / 0.005
         hip_sagittal_acc = np.diff(hip_sagittal_speed, prepend=0) / 0.005
 
-        heelstrike = file['heelstrike'].values
+        heelstrike = file['HeelStrike'].values
         heelstrike_radians = (heelstrike / 100.0) * 2 * np.pi
         heelstrike_x = np.cos(heelstrike_radians)
         heelstrike_y = np.sin(heelstrike_radians)

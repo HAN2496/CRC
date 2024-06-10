@@ -69,7 +69,7 @@ class Control:
                             [self.gp_original.y_pred_original]
                         ])
                     continue
-                if pass_high < 42:
+                if pass_high < 62:
                     self.corrected_datas.appends(self.original_datas.indexs(idx))
                     idx += 1
                     pass_high += 1

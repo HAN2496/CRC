@@ -1,13 +1,11 @@
 import torch
 from tsai.basics import *
 
-from datasets.datasets import Datasets
-from estimation.load_data import load_data
-from datasets.td import TD
-from datasets.cp import CP
-from controller.gp import GP
+from utils.load_train_data import load_train_data
+from utils.td import TD
+from src.trajectory_generator import Reference
 from configs.config_estimation import MODEL_NAME, NUM_EPOCHS, BATCH_SIZE, LEARNING_RATE, INPUT_WINDOW_LENGTH
-from utils.visualize import visualize_predictions, visualize_gp
+from utils.visualize import visualize_predictions, visualize_reference_trajectory
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -19,7 +17,7 @@ else:
 """
 Step1: Train estimation model
 """
-X_train, y_train, X_test, y_test = load_data()
+X_train, y_train, X_test, y_test = load_train_data()
 splits = TimeSplitter(int(0.2 * len(X_train)), fcst_horizon=0, show_plot=False)(y_train)
 
 # Train model
@@ -40,11 +38,11 @@ visualize_predictions(reg, X_test, y_test, n_samples=n_samples, input_window_len
 
 
 
-
 """
 Step2:  Fit reference trajectory (by gaussian process)
 """
 td = TD(number=6, cut=True)
 X = td.datas['heelstrike']
 y = td.datas['hip_sagittal']
-gp = GP(fit_mode=True, X=X, y=y)
+gp = Reference(fit_mode=True, X=X, y=y)
+visualize_reference_trajectory(td.datas, gp)

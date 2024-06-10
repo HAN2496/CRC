@@ -71,11 +71,12 @@ class GP:
     def scale(self, heelstrike, scale_x=1.0, scale_y=1.0, x_pos=0.0, end=True, save_data=False, idx=-1):
         #print('scale interval: ', heelstrike - 100, heelstrike)
         data_len = len(self.times)
-        if end:
+        self.data_len = data_len
+        if end: # reference trajectory 생성용
             heelstrike = np.linspace(heelstrike - 100, heelstrike, data_len)  * (2 * np.pi / 100)
             X_time = self.times.copy()
             X_time += x_pos - X_time[-1]
-        else:
+        else: # control trajectory 생성용
             #data_len = int(data_len / 10)
             data_len = int(data_len)
             heelstrike = np.linspace(heelstrike, heelstrike + 100, data_len)  * (2 * np.pi / 100)
@@ -87,6 +88,11 @@ class GP:
         heelstrike_y = np.sin(heelstrike)
         X = np.column_stack((heelstrike_x, heelstrike_y))
         y_pred, _ = self.predict(X, save_data=False)
+
+        # if end:
+        #     y_pred = y_pred - (y_pos - y_pred[-1])
+        # else:
+        #     y_pred = y_pred - (y_pos - y_pred[0])
         
         if x_pos != 0.0:
             X_scalar_gp = (X_time - x_pos) * scale_x + x_pos

@@ -6,6 +6,7 @@ from gp import GP
 from matplotlib import pyplot as plt
 from datasets import Datasets
 from scipy.optimize import minimize
+import matplotlib.animation as animation
 import imageio
 from scipy.signal import savgol_filter
 # import matplotlib
@@ -23,10 +24,11 @@ class Control:
         print("Total data num: ", self.total_data_num)
         self.original_datas.appends({'start_indices': self.subject.start_indices})
         self.corrected_datas = Datasets()
+        self.scale_histories = []
 
-        self.Kp = 1000
+        self.Kp = 2000
         self.Ki = 0
-        self.Kd = 100
+        self.Kd = 40
         self.learning_rate = 0.001
         self.num_iterations = 201
 
@@ -58,6 +60,7 @@ class Control:
             else:
                 if one_more:
                     start_idx = idx
+                    self.start_idx = start_idx
                     self.corrected_datas.appends(self.original_datas.indexs(idx))
                     idx += 1
                     one_more = False
@@ -72,7 +75,7 @@ class Control:
                             [self.gp_original.y_pred_original]
                         ])
                     continue
-                if pass_high < 65:
+                if pass_high < 62: #500:
                     start_idx = idx
                     self.corrected_datas.appends(self.original_datas.indexs(idx))
                     idx += 1
@@ -80,7 +83,7 @@ class Control:
                     continue
                 print(f"Now idx: {idx} (total: {self.total_data_num})")
 
-                x_scale, y_scale = self.minimize_scale(idx)
+                (x_scale, y_scale), detail_scale_hisotries = self.minimize_scale(idx)
                 print(f"x scale: {x_scale} / y scale: {y_scale}")
 
                 # tmp_x1, tmp_y1 = self.gp.scale(self.corrected_datas['heelstrike'][-1], 1.0, 1.0,
@@ -138,8 +141,8 @@ class Control:
 
                     plt.figure(figsize=(15, 10))
                     #plt.plot(self.gp_original.X_time_original, self.gp_original.y_pred_original, label='original gp line')
-                    plt.plot(self.original_datas['header'][:idx], self.original_datas['hip_sagittal'][:idx],  color='black', label='original subject')
-                    plt.plot(self.corrected_datas['header'][start_idx:], self.corrected_datas['hip_sagittal'][start_idx:], color='green', linewidth=3, label='corrected subject')
+                    plt.plot(self.original_datas['header'][:idx], self.original_datas['hip_sagittal'][:idx],  color='black', label='original trajectory')
+                    plt.plot(self.corrected_datas['header'][start_idx:], self.corrected_datas['hip_sagittal'][start_idx:], color='green', linewidth=3, label='corrected trajectory')
                     X_pred_gp, y_pred_gp = self.gp.scale(self.corrected_datas['heelstrike'][-1], x_scale, y_scale, self.corrected_datas['header'][-1])
                     plt.plot(X_pred_gp, y_pred_gp, color='red', label='reference trajectory')
                     
@@ -153,17 +156,29 @@ class Control:
                     plt.close()
 
                     if idx == total_idx - 1:
-                        plt.figure(figsize=(15, 10))
-                        #plt.plot(self.gp_original.X_time_original, self.gp_original.y_pred_original, label='original gp line')
-                        plt.plot(self.original_datas['header'], self.original_datas['hip_sagittal'],  color='black', label='original subject')
-                        plt.plot(self.corrected_datas['header'], self.corrected_datas['hip_sagittal'], color='green', linewidth=3, label='corrected subject')
-                        X_pred_gp, y_pred_gp = self.gp.scale(self.corrected_datas['heelstrike'][-1], x_scale, y_scale, self.corrected_datas['header'][-1])
-                        plt.plot(X_pred_gp, y_pred_gp, color='red', label='reference trajectory')
                         existing_gif_count = sum(1 for file in os.listdir("gifs/") if file.startswith("Patient") and file.endswith(".gif"))
                         next_gif_number = existing_gif_count + 1
-                        plt.savefig(f"image/Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}")
+                        plt.figure(figsize=(15, 10))
+                        #plt.plot(self.gp_original.X_time_original, self.gp_original.y_pred_original, label='original gp line')
+                        plt.plot(self.original_datas['header'], self.original_datas['hip_sagittal'],  color='black', label='original trajectory')
+                        plt.savefig(f"image/Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}_original")
+                        plt.close()
+                        plt.figure(figsize=(15, 10))
+                        plt.plot(self.corrected_datas['header'], self.corrected_datas['hip_sagittal'], color='green', linewidth=3, label='corrected trajectory')
+                        plt.savefig(f"image/Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}_corrected")
+                        plt.close()
+                        plt.figure(figsize=(15, 10))
+                        plt.plot(self.original_datas['header'], self.original_datas['hip_sagittal'],  color='black', label='original trajectory')
+                        plt.plot(self.corrected_datas['header'], self.corrected_datas['hip_sagittal'], color='green', linewidth=3, label='corrected trajectory')
+                        plt.savefig(f"image/Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}_total")
+                        plt.close()
+                        # X_pred_gp, y_pred_gp = self.gp.scale(self.corrected_datas['heelstrike'][-1], x_scale, y_scale, self.corrected_datas['header'][-1])
+                        # plt.plot(X_pred_gp, y_pred_gp, color='red', label='reference trajectory')
+
+                        #plt.savefig(f"image/Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}")
 
 
+                    self.scale_histories.append([idx, self.corrected_datas['heelstrike'][-1], self.corrected_datas['header'][-1], detail_scale_hisotries])
                     data_point = {
                         'section': self.original_datas['section'][idx],
                         'header': self.original_datas['header'][idx],
@@ -201,9 +216,11 @@ class Control:
             unchange_datas['corrected subject'] = self.corrected_datas.datas
 
     def minimize_scale(self, idx):
+        scale_histories = []
         def objective(params, X, y_actual, heelstrike, interval=0):
             tmp = 0
             scale_x, scale_y = params
+            scale_histories.append([scale_x, scale_y])
             X_pred, y_pred = self.gp.scale(heelstrike, scale_x, scale_y, X[-1])
             error = 0
             for x, y in zip(X_pred, y_pred):
@@ -228,8 +245,9 @@ class Control:
 
         X = self.corrected_datas['header']
         y = self.corrected_datas['hip_sagittal']
-        #bounds = [(0.1, 10.0), (0.5, 1.5)]
-        result = minimize(objective, initial_params, args=(X, y, self.corrected_datas['heelstrike'][-1]), method='Powell')#'L-BFGS-B')#, bounds=bounds)
+        #bounds = [(0.5, 2.0), (0.5, 1.5)]
+        #result = minimize(objective, initial_params, args=(X, y, self.corrected_datas['heelstrike'][-1]), method='L-BFGS-B')
+        result = minimize(objective, initial_params, args=(X, y, self.corrected_datas['heelstrike'][-1]), method='Powell')
         if result.success:
             optimized_scale_x, optimized_scale_y = result.x
             #print("Optimization successful:", result.message)
@@ -239,7 +257,52 @@ class Control:
             optimized_scale_x, optimized_scale_y = result.x
             #raise ValueError("Optimization failed:", result.message)
 
-        return result.x
+        if (idx - (self.start_idx + 62)) % 50 == 0:
+            scale_histories = np.array(scale_histories)
+            total_frame_len = scale_histories.shape[0]
+
+            scale_x2, scale_y2 = scale_histories[-1]
+            x0, _ = self.gp.scale(self.corrected_datas['heelstrike'][-1], scale_x2, scale_y2, X[-1])
+            def init():
+                line1.set_data([], [])
+                line2.set_data([], [])
+                line3.set_data([], [])
+                return line1, line2, line3, title
+            
+            def update(frame):
+                if frame >= total_frame_len:
+                    frame2 = total_frame_len - 1
+                else:
+                    frame2 = frame
+                scale_x, scale_y = scale_histories[frame2]
+                line1.set_data(self.corrected_datas['header'][:-1], self.corrected_datas['hip_sagittal'][:idx-1])
+                x1, y1 = self.gp.scale(self.corrected_datas['heelstrike'][-1], scale_x, scale_y, X[-1])
+                line2.set_data(x1, y1)
+                if frame >= total_frame_len:
+                    #alpha = (frame - frame2) / 10.01   
+                    x2, y2 = self.gp.scale(self.corrected_datas['heelstrike'][-1], scale_x, scale_y, X[-1], end=False)
+                    control_len = int(len(y2) / 4)
+                    line3.set_data(x2[:control_len], y2[:control_len])
+                    #line3.set_alpha(alpha)
+                title = ax.set_title(f'Scaling process (Total scaling repeat num: {total_frame_len} / now: {frame2+1})')
+                return line1, line2, line3, title
+
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.set_xlim(x0[0]-0.3, x0[-1]-0.3)
+            ax.set_ylim(-20, 30)
+            line1, = ax.plot([], [], 'k', label='Original Trajectory')
+            line2, = ax.plot([], [], 'r', label='Reference Trajectory')
+            line3, = ax.plot([], [], 'r--', label='Control Trajectory')
+            title = ax.set_title(f'Scaling process (Total scaling repeat num: {total_frame_len} / now: {0})')
+            frames = range(0, total_frame_len + 30, 2)
+            ax.legend()
+
+            ani = animation.FuncAnimation(fig, update, frames=frames, init_func=init, blit=True, repeat=False)
+            #writervideo = animation.FFMpegWriter(fps=60)
+            ani.save(f'scaling_gifs/scaling process_{idx}.gif', writer='imagemagick', fps=25, dpi=100)
+            print("ANIMATION SAVED")
+            plt.close()
+        return result.x, scale_histories
 
     def plot(self, show=True):
         x = self.original_datas['header']
@@ -254,7 +317,21 @@ class Control:
 
 control = Control()
 control.control()
-#control.plot()
-#for idx in range(control.total_data_num - 1):
-#for idx in range(150):
-#    control.control(idx)
+
+
+
+
+# for idx, heelstrike, header, scale_histories in control.scale_histories:
+#     plt.plot(control.original_datas['header'], control.original_datas['hip_sagittal'], label='original subject hip sagittal trajectory')
+#     plt.plot(control.corrected_datas['header'][control.start_idx:], control.corrected_datas['hip_sagittal'][control.start_idx:],
+#              color='green', linewidth=3, label='corrected subject')
+
+#     for scale_x, scale_y in scale_histories:
+#         X_pred_gp, y_pred_gp = control.gp.scale(control.corrected_datas['heelstrike'][-1], scale_x, y_scascale_yle, control.corrected_datas['header'][-1])
+#         plt.plot(X_pred_gp, y_pred_gp, color='red', label='reference trajectory') #이게 앞쪽
+
+#     half_len = int(len(y_pred_gp) / 4)
+#     X_pred_gp, y_pred_gp = control.gp.scale(control.corrected_datas['heelstrike'][-1], scale_histories[0][0], scale_histories[0][1],
+#                                                      control.corrected_datas['header'][-1], end=False) #이게 뒤쪽
+#     plt.plot(X_pred_gp, y_pred_gp)
+
