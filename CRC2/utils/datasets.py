@@ -40,7 +40,7 @@ class Datasets:
         else:
             raise TypeError("Invalid key type. Must be str, int, or slice.")
     
-    def redifine_indexs(self):
+    def redefine_indexs(self):
         self.datas['section'] = np.array(self.datas['section']) - self.datas['section'][0]
     
     def append(self, key, data):
@@ -111,8 +111,8 @@ class Datasets:
 class Test:
     def __init__(self):
         self.data = Datasets()
-        self.data.appends({'section': [1, 1, 2, 2], 'header': [10, 20, 30, 40], 'hip_sagittal': [100, 200, 300, 400]
-                           , 'total_sections': [0, 1, 2]})
+        self.data.appends({'section': [1, 1, 2, 2], 'header': [10, 20, 30, 40], 'hip_sagittal': [100, 200, 300, 400],
+                           'total_sections': [0, 1, 2]})
         print(self.data)
         print("="*50)
         print(self.data['header'])

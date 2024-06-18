@@ -68,7 +68,7 @@ class GP:
         self.X = X
         self.y_pred = self.predict(X)
 
-    def scale(self, heelstrike, scale_x=1.0, scale_y=1.0, x_pos=0.0, end=True, save_data=False, idx=-1):
+    def scale(self, heelstrike, scale_x=1.0, scale_y=1.0, x_pos=0.0, y_pos = 0.0, end=True, save_data=False, idx=-1):
         #print('scale interval: ', heelstrike - 100, heelstrike)
         data_len = len(self.times)
         self.data_len = data_len
@@ -89,16 +89,21 @@ class GP:
         X = np.column_stack((heelstrike_x, heelstrike_y))
         y_pred, _ = self.predict(X, save_data=False)
 
-        # if end:
-        #     y_pred = y_pred - (y_pos - y_pred[-1])
-        # else:
-        #     y_pred = y_pred - (y_pos - y_pred[0])
-        
         if x_pos != 0.0:
             X_scalar_gp = (X_time - x_pos) * scale_x + x_pos
         else:
             X_scalar_gp = X_time * scale_x
-        y_pred_gp = y_pred * scale_y
+        if end:
+            if y_pos != 0.0:
+                y_pred = y_pred + (y_pos - y_pred[-1])
+        else:
+            if y_pos != 0.0:
+                y_pred = y_pred + (y_pos - y_pred[0])
+        
+        if y_pos != 0.0:
+            y_pred_gp = (y_pred - y_pos) * scale_y + y_pos
+        else:
+            y_pred_gp = y_pred * scale_y
 
         # global show_graph
         # if show_graph % 2 == 0:

@@ -26,11 +26,17 @@ class Control:
         self.corrected_datas = Datasets()
         self.scale_histories = []
 
-        self.Kp = 2000
+        self.Kp = 20000
         self.Ki = 0
-        self.Kd = 40
+        self.Kd = 0
         self.learning_rate = 0.001
         self.num_iterations = 201
+
+        self.scale_x_before, self.scale_y_before = 1.0, 1.0
+
+        existing_gif_count = sum(1 for file in os.listdir("gifs/") if file.startswith("Patient") and file.endswith(".gif"))
+        next_gif_number = existing_gif_count + 1
+        self.exportname = f"Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}"
 
     def control(self):
         one_more = True
@@ -83,7 +89,7 @@ class Control:
                     continue
                 print(f"Now idx: {idx} (total: {self.total_data_num})")
 
-                (x_scale, y_scale), detail_scale_hisotries = self.minimize_scale(idx)
+                x_scale, y_scale = self.minimize_scale(idx)
                 print(f"x scale: {x_scale} / y scale: {y_scale}")
 
                 # tmp_x1, tmp_y1 = self.gp.scale(self.corrected_datas['heelstrike'][-1], 1.0, 1.0,
@@ -139,7 +145,7 @@ class Control:
                     # x_t1 = x_t + v_t * self.dt + 0.5 * a_t_prev * self.dt ** 2
 
 
-                    plt.figure(figsize=(15, 10))
+                    plt.figure(figsize=(12, 8))
                     #plt.plot(self.gp_original.X_time_original, self.gp_original.y_pred_original, label='original gp line')
                     plt.plot(self.original_datas['header'][:idx], self.original_datas['hip_sagittal'][:idx],  color='black', label='original trajectory')
                     plt.plot(self.corrected_datas['header'][start_idx:], self.corrected_datas['hip_sagittal'][start_idx:], color='green', linewidth=3, label='corrected trajectory')
@@ -148,7 +154,9 @@ class Control:
                     
                     half_len = int(len(tmp_y) / 4)
                     plt.plot(tmp_x[:half_len], tmp_y[:half_len], color='red', linestyle='--', label='control trajectory')
-                    plt.legend(loc='lower left')
+                    plt.legend(loc='upper right')
+                    plt.xlabel('time (sec)')
+                    plt.ylabel('hip sagittal (deg)')
                     plt.xlim([min(X_pred_gp), max(tmp_x[:half_len])])
                     filename = f"tmp/{idx}.png"
                     filenames.append(filename)
@@ -158,19 +166,25 @@ class Control:
                     if idx == total_idx - 1:
                         existing_gif_count = sum(1 for file in os.listdir("gifs/") if file.startswith("Patient") and file.endswith(".gif"))
                         next_gif_number = existing_gif_count + 1
-                        plt.figure(figsize=(15, 10))
+                        plt.figure(figsize=(12, 8))
                         #plt.plot(self.gp_original.X_time_original, self.gp_original.y_pred_original, label='original gp line')
                         plt.plot(self.original_datas['header'], self.original_datas['hip_sagittal'],  color='black', label='original trajectory')
-                        plt.savefig(f"image/Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}_original")
+                        plt.xlabel('time (sec)')
+                        plt.ylabel('hip sagittal (deg)')
+                        plt.savefig(f"image/{self.exportname}_original")
                         plt.close()
-                        plt.figure(figsize=(15, 10))
+                        plt.figure(figsize=(12, 8))
                         plt.plot(self.corrected_datas['header'], self.corrected_datas['hip_sagittal'], color='green', linewidth=3, label='corrected trajectory')
-                        plt.savefig(f"image/Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}_corrected")
+                        plt.xlabel('time (sec)')
+                        plt.ylabel('hip sagittal (deg)')
+                        plt.savefig(f"image/{self.exportname}_corrected")
                         plt.close()
-                        plt.figure(figsize=(15, 10))
+                        plt.figure(figsize=(12, 8))
                         plt.plot(self.original_datas['header'], self.original_datas['hip_sagittal'],  color='black', label='original trajectory')
                         plt.plot(self.corrected_datas['header'], self.corrected_datas['hip_sagittal'], color='green', linewidth=3, label='corrected trajectory')
-                        plt.savefig(f"image/Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}_total")
+                        plt.xlabel('time (sec)')
+                        plt.ylabel('hip sagittal (deg)')
+                        plt.savefig(f"image/{self.exportname}_total")
                         plt.close()
                         # X_pred_gp, y_pred_gp = self.gp.scale(self.corrected_datas['heelstrike'][-1], x_scale, y_scale, self.corrected_datas['header'][-1])
                         # plt.plot(X_pred_gp, y_pred_gp, color='red', label='reference trajectory')
@@ -202,7 +216,7 @@ class Control:
         print('now gif will save ...')
         existing_gif_count = sum(1 for file in os.listdir("gifs/") if file.startswith("Patient") and file.endswith(".gif"))
         next_gif_number = existing_gif_count + 1
-        exportname = f"gifs/Patient{next_gif_number}_Kp{self.Kp}_Ki{self.Ki}_Kd_{self.Kd}"
+        exportname = f"gifs/{self.exportname}"
         duration_rate = 1
         for filename in filenames:
             if filename.endswith(".png"):
@@ -241,13 +255,14 @@ class Control:
             tmp+=1
             #print(f"x scale: {scale_x} / y scale: {scale_y} / error: {error}")
             return error
-        initial_params = [1.0, 1.0]
+        initial_params = [self.scale_x_before, self.scale_y_before]
 
         X = self.corrected_datas['header']
         y = self.corrected_datas['hip_sagittal']
         #bounds = [(0.5, 2.0), (0.5, 1.5)]
         #result = minimize(objective, initial_params, args=(X, y, self.corrected_datas['heelstrike'][-1]), method='L-BFGS-B')
         result = minimize(objective, initial_params, args=(X, y, self.corrected_datas['heelstrike'][-1]), method='Powell')
+        self.scale_x_before, self.scale_y_before = result.x
         if result.success:
             optimized_scale_x, optimized_scale_y = result.x
             #print("Optimization successful:", result.message)
@@ -257,52 +272,65 @@ class Control:
             optimized_scale_x, optimized_scale_y = result.x
             #raise ValueError("Optimization failed:", result.message)
 
-        if (idx - (self.start_idx + 62)) % 50 == 0:
-            scale_histories = np.array(scale_histories)
-            total_frame_len = scale_histories.shape[0]
+        # if (idx - (self.start_idx + 62)) % 50 == 0:
+        #     scale_histories = np.array(scale_histories)
+        #     total_frame_len = scale_histories.shape[0]
+        #     original_y = self.original_datas['hip_sagittal'][idx]
 
-            scale_x2, scale_y2 = scale_histories[-1]
-            x0, _ = self.gp.scale(self.corrected_datas['heelstrike'][-1], scale_x2, scale_y2, X[-1])
-            def init():
-                line1.set_data([], [])
-                line2.set_data([], [])
-                line3.set_data([], [])
-                return line1, line2, line3, title
+        #     scale_x2, scale_y2 = scale_histories[-1]
+        #     x0, _ = self.gp.scale(self.corrected_datas['heelstrike'][-1], scale_x2, scale_y2, X[-1], original_y)
+        #     def init():
+        #         line1.set_data([], [])
+        #         line2.set_data([], [])
+        #         line3.set_data([], [])
+        #         text.set_text('')
+        #         return line1, line2, line3, title, text\
+
+
+        
             
-            def update(frame):
-                if frame >= total_frame_len:
-                    frame2 = total_frame_len - 1
-                else:
-                    frame2 = frame
-                scale_x, scale_y = scale_histories[frame2]
-                line1.set_data(self.corrected_datas['header'][:-1], self.corrected_datas['hip_sagittal'][:idx-1])
-                x1, y1 = self.gp.scale(self.corrected_datas['heelstrike'][-1], scale_x, scale_y, X[-1])
-                line2.set_data(x1, y1)
-                if frame >= total_frame_len:
-                    #alpha = (frame - frame2) / 10.01   
-                    x2, y2 = self.gp.scale(self.corrected_datas['heelstrike'][-1], scale_x, scale_y, X[-1], end=False)
-                    control_len = int(len(y2) / 4)
-                    line3.set_data(x2[:control_len], y2[:control_len])
-                    #line3.set_alpha(alpha)
-                title = ax.set_title(f'Scaling process (Total scaling repeat num: {total_frame_len} / now: {frame2+1})')
-                return line1, line2, line3, title
+        #     def update(frame):
+        #         if frame >= total_frame_len:
+        #             frame2 = total_frame_len - 1
+        #         else:
+        #             frame2 = frame
+        #         scale_x, scale_y = scale_histories[frame2]
+        #         line1.set_data(self.original_datas['header'][:idx], self.original_datas['hip_sagittal'][:idx])
+        #         x1, y1 = self.gp.scale(self.corrected_datas['heelstrike'][-1], scale_x, scale_y, X[-1], original_y)
+        #         line2.set_data(x1, y1)
+        #         if frame >= total_frame_len:
+        #             #alpha = (frame - frame2) / 10.01   
+        #             x2, y2 = self.gp.scale(self.corrected_datas['heelstrike'][-1], scale_x, scale_y, X[-1], original_y, end=False)
+        #             control_len = int(len(y2) / 4)
+        #             line3.set_data(x2[:control_len], y2[:control_len])
+        #             #line3.set_alpha(alpha)
+        #         if frame >= total_frame_len:
+        #             text.set_text(f'Optimized scale <x: {scale_histories[frame2][0]:.3f}, y: {scale_histories[frame2][1]:.3f}>')
+        #         else:
+        #             text.set_text('')
+        #         title = ax.set_title(f'Scaling process (Iteration:{frame2+1}/{total_frame_len})')
+        #         return line1, line2, line3, title, text
 
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.set_xlim(x0[0]-0.3, x0[-1]-0.3)
-            ax.set_ylim(-20, 30)
-            line1, = ax.plot([], [], 'k', label='Original Trajectory')
-            line2, = ax.plot([], [], 'r', label='Reference Trajectory')
-            line3, = ax.plot([], [], 'r--', label='Control Trajectory')
-            title = ax.set_title(f'Scaling process (Total scaling repeat num: {total_frame_len} / now: {0})')
-            frames = range(0, total_frame_len + 30, 2)
-            ax.legend()
+        #     fig, ax = plt.subplots(figsize=(10, 6))
+        #     ax.set_xlim(x0[0]-0.05, x0[-1]+0.35)
+        #     ax.set_ylim(-25, 35)
+        #     ax.set_xlabel("time")
+        #     ax.set_ylabel("hip sagittal angle")
+        #     line1, = ax.plot([], [], 'k', label='Original Trajectory')
+        #     line2, = ax.plot([], [], 'r', label='Reference Trajectory')
+        #     line3, = ax.plot([], [], 'r--', label='Control Trajectory')
+        #     title = ax.set_title(f'Scaling process (Iteration::{0}/{total_frame_len})')
+        #     text = ax.text(0.5, 0.1, '', transform=ax.transAxes, fontsize=12, verticalalignment='center',
+        #                    horizontalalignment='center', bbox=dict(facecolor='gray', alpha=0.5))
+        #     frames = range(0, total_frame_len + 60, 2)
+        #     ax.legend(loc='upper right')
 
-            ani = animation.FuncAnimation(fig, update, frames=frames, init_func=init, blit=True, repeat=False)
-            #writervideo = animation.FFMpegWriter(fps=60)
-            ani.save(f'scaling_gifs/scaling process_{idx}.gif', writer='imagemagick', fps=25, dpi=100)
-            print("ANIMATION SAVED")
-            plt.close()
-        return result.x, scale_histories
+        #     ani = animation.FuncAnimation(fig, update, frames=frames, init_func=init, blit=True, repeat=False)
+        #     #writervideo = animation.FFMpegWriter(fps=60)
+        #     ani.save(f'scaling_gifs/{self.exportname}.gif', writer='imagemagick', fps=25, dpi=100)
+        #     print("ANIMATION SAVED")
+        #     plt.close()
+        return result.x
 
     def plot(self, show=True):
         x = self.original_datas['header']

@@ -6,7 +6,7 @@ import c3d
 from scipy.signal import find_peaks
 
 BASE_PATH = Path(__file__).parent
-file_path = BASE_PATH / "DiCP2.c3d"
+file_path = BASE_PATH / "DiCP3a.c3d"
 datasets = c3d.Reader(open(file_path, 'rb')) #read bytes type
 frames = list(datasets.read_frames())
 labels = datasets.point_labels
@@ -93,8 +93,8 @@ for heelstrike in heelstrikes:
             section += 1
     sections.append(section)
 total_data = np.column_stack((headers, sections, heelstrikes, interpolated_data))
-df = pd.DataFrame(total_data, columns=['header', 'section', 'heelstrike', 'hip_sagittal'])
-df.to_csv("DiCP2.csv", index=False)
+# df = pd.DataFrame(total_data, columns=['header', 'section', 'heelstrike', 'hip_sagittal'])
+# df.to_csv("DiCP2.csv", index=False)
 
 
 

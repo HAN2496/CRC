@@ -12,7 +12,7 @@ def load_train_data(use_td=True):
     all_sequences, all_targets = [], []
     subjects = TD_SUBJECTS if use_td else CP_SUBJECTS
     for number in subjects:
-        subject = TD(number=number, extract_walking=False) if use_td else CP(number=number)
+        subject = TD(number=number, choose_one_dataset=False, extract_walking=True) if use_td else CP(number=number)
         each_data_len = subject.datas['length of each file']
         hip_sagittal = np.array(subject.datas['hip_sagittal'])
         heelstrike_x = np.array(subject.datas['heelstrike_x'])

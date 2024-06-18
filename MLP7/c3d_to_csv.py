@@ -86,8 +86,8 @@ for heelstrike in heelstrikes:
             section += 1
     sections.append(section)
 total_data = np.column_stack((headers, sections, heelstrikes, interpolated_data))
-df = pd.DataFrame(total_data, columns=['header', 'section', 'heelstrike', 'hip_sagittal'])
-df.to_csv("CP child gait data/dicp/DiCP3a_x.csv", index=False)
+# df = pd.DataFrame(total_data, columns=['header', 'section', 'heelstrike', 'hip_sagittal'])
+# df.to_csv("CP child gait data/dicp/DiCP3a_x.csv", index=False)
 
 
 

@@ -38,7 +38,7 @@ class Reference:
             raise ValueError("")
         y_pred, sigma = self.model.predict(X, return_std=True)
         return y_pred, sigma
-    
+
     def scalar_to_rad(self, heelstrike):
         radians = (heelstrike / 100.0) * 2 * np.pi
         return np.cos(radians), np.sin(radians)
@@ -50,21 +50,22 @@ class Reference:
         X = np.column_stack((self.heelstrike_x, self.heelstrike_y))
         self.y_pred, self.sigma = self.predict(X)
 
+
     def move(self, x, y, delx, dely):
         return x + delx, y - dely
-    
-    def scale(self, heelstrike, time, scale_x, scale_y, reverse=False):
-        closest_index = min(range(len(self.heelstrike)), key=lambda i: abs(self.heelstrike[i] - heelstrike))
-        sorted_y_pred = np.concatenate((self.y_pred[closest_index:], self.y_pred[:closest_index]))
 
+    def scale(self, heelstrike, time, scale_x, scale_y, scale_from_end=True):
+        closest_index = min(range(len(self.heelstrike)), key=lambda i: abs(self.heelstrike[i] - heelstrike))
+        y_pred_sorted = np.roll(self.y_pred, -closest_index)
         times = self.times.copy()
-        if reverse:
+        if scale_from_end:
             times =  times + (time - times[-1])
         else:
             times = times + (time - times[0])
         
         times = (times - time) * scale_x + time
-        y_pred = sorted_y_pred * scale_y
+        y_pred = y_pred_sorted * scale_y
+
 
         return times, y_pred
 
@@ -74,10 +75,11 @@ class Reference:
 
 if __name__ == "__main__":
     reference = Reference()
-    td = TD(number=6)
+    td = TD(number=6, choose_one_dataset=False, extract_walking=False)
+    td.extract_one_datasets(True)
     datas = td.datas
     reference.update(datas['header'], datas['heelstrike'])
-    time, y_pred = reference.scale(10, 1.0, 1.2, 1.5, 1.0)
+    time, y_pred = reference.scale(40, 1.0, 1.2, 1.5, 1.0)
     plt.plot(time, y_pred, color='red', linestyle='--')
     plt.show()
     reference.plot()

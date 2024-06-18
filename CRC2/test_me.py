@@ -1,136 +1,43 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
-
-class Control:
-    def __init__(self):
-        self.subject = TD(number=6)
-        self.gp = GP()
-        self.original_datas = self.subject.datas
-        self.corrected_datas = Datasets()
-        self.scale_histories = []
-        self.total_data_num = len(self.original_datas['header'])
-        print(f"total data num: {self.total_data_num}")
-
-        self.control_interval = 1
-        self.control_start_idx = 0
-
-    def control(self):
-        idx = 0
-        collect_one_more = True
-        while idx < self.total_data_num:
-            if self.original_datas['section'][idx] == 0:
-                """
-                collect data at first loop
-                """
-                self.corrected_datas.appends(self.original_datas.indexs(idx))
-                idx += 1
-            else:
-                if collect_one_more:
-                    self.corrected_datas.appends(self.original_datas.indexs(idx))
-                    self.gp.update(self.original_datas['header'][:idx], self.original_datas['heelstrike'])
-                    collect_one_more = False
-                    self.control_start_idx = idx
-                    idx+=1
-                print(f"Now idx: {idx} (total: {self.total_data_num})")
-
-                scale_x, scale_y = self.minimize_scale()
-                X_gp, y_gp = self.gp.scale(self.corrected_datas['heelstrike'][-1], self.corrected_datas['header'][-1],
-                                           scale_x, scale_y)
-
-                torque_subject = self.original_datas['torque'][idx:idx+self.control_interval]
-                v_t = self.corrected_datas['hip_sagittal_v'][-1]
-                x_t = self.corrected_datas['hip_sagittal'][-1]
-
-                error_before = y_gp[1] - self.corrected_datas['hip_sagittal'][-1]
-                for i in range(self.control_interval):
-                    error =  y_gp[i+1] - self.corrected_datas['hip_sagittal'][-1]
-                    d_error = (error - error_before) / dt
-                    total_error = Kp * error + Kd * d_error
-                    torque_input = total_error + torque_subject[i]
-
-                    a_t = self.subject.move(torque_input)
-                    v_t1 = v_t + a_t * dt
-                    x_t1 = x_t + v_t1 + dt + 0.5 * a_t * dt ** 2
-
-                    data_point = {
-                        'section': self.original_datas['section'][idx],
-                        'header': self.original_datas['header'][idx],
-                        'hip_sagittal': x_t1,
-                        'hip_sagittal_speed': v_t1,
-                        'hip_sagittal_acc': a_t,
-                        'heelstrike': self.original_datas['heelstrike'][idx],
-                        'heelstrike_x': self.original_datas['heelstrike_x'][idx],
-                        'heelstrike_y': self.original_datas['heelstrike_y'][idx],
-                        'torque': torque_input
-                    }
-                    self.corrected_datas.appends(data_point)
-                    x_t = x_t1
-                    v_t = v_t1
-                    error_before = error
-
-                    idx += 1
-
-    def minimize_scale(self):
-        def objective(params, X, y, heelstrike):
-            scale_x, scale_y = params
-            X_gps, y_gps = self.gp.scale(heelstrike, X[-1], scale_x, scale_y)
-            error = 0
-            for X_gp, y_gp in zip(X_gps, y_gps):
-                if X_gp >= X[0]:
-                    closest_idx = np.abs(X_gp - X).argmin()
-                    error += (y_gp - y[closest_idx]) ** 2
-            return error
-        initial_params = [1.0, 1.0]
-
-        X = self.corrected_datas['header']
-        y = self.corrected_datas['hip_sagittal']
-        heelstrike = self.corrected_datas['heelstrike'][-1]
-        result = minimize(objective, initial_params, args=(X, y, heelstrike), method='L-BFGS-B')#, bounds=bounds)
-        if result.success:
-            pass
-        else:
-            print("Optimization failed:", result.message)
-
-        self.scale_histories.append([heelstrike, X[-1], result.x[0], result.x[1]])
-        return result.x
-    
-    def plot_each(self, idx, save=True):
-        plt.figure(figsize=(15, 10))
-        plt.plot(self.original_datas['header'], self.original_datas['hip_sagittal'],  color='green', label='original subject')
-        plt.plot(self.corrected_datas['header'], self.corrected_datas['hip_sagittal'], marker='.', linestyle='', color='k', label='corrected subject')
-
-        heelstrike, time, scale_x, scale_y = self.scale_histories[idx]
-        X_pred_gp, y_pred_gp = self.gp.scale(heelstrike, time, scale_x, scale_y)
-        plt.plot(X_pred_gp, y_pred_gp, color='blue', label='gp line for scaling')
-
-        X_pred_gp, y_pred_gp = self.gp.scale(heelstrike, time, scale_x, scale_y, reverse=True)
-        half_len = int(len(y_pred_gp))
-        plt.plot(X_pred_gp[:half_len], y_pred_gp[:half_len], color='red', label='gp line for reference')
-        plt.legend()
-        if save:
-            filename = f"tmp/{idx}.png"
-            plt.savefig(filename)
-        plt.close()
-        return filename
-    
-    def plot(self):
-        filenames = []
-        for i in range(self.control_start_idx, self.total_data_num):
-            filenames.append(self.plot_each(i))
-
-        print('now png will change into gif ...')
-    
-        frames = []
-        existing_gif_count = sum(1 for file in os.listdir("gifs/") if file.startswith("output") and file.endswith(".gif"))
-        next_gif_number = existing_gif_count + 1
-        exportname = f"gifs/output{next_gif_number}_Kp{Kp}_Kd_{Kd}"
-        duration_rate = 1
-        for filename in filenames:
-            if filename.endswith(".png"):
-                frames.append(imageio.imread(filename))
-        imageio.mimsave(f"{exportname}.gif", frames, format='GIF', duration=duration_rate)
-        plt.savefig(filenames[-1])
-
-        # for filename in set(filenames):
-        #     os.remove(filename)
-        print('gif saved.')
+data = [14.56365971, 14.48187647, 14.40465882, 14.33139189, 14.26140583, 14.1939812,
+        14.12835476, 14.06372539, 13.99926043, 13.93410223, 13.86737499, 13.7981919,
+        13.72566252, 13.64890043, 13.567031, 13.47919943, 13.38457878, 13.28237811,
+        13.17185053, 13.05230113, 12.92309469, 12.78366305, 12.6335121, 12.47222814,
+        12.29948366, 12.11504237, 11.91876337, 11.71060429, 11.49062358, 11.2589815,
+        11.01594008, 10.76186181, 10.49720715, 10.22253072, 9.93847638, 9.64577101,
+        9.34521722, 9.03768497, 8.72410224, 8.40544482, 8.08272542, 7.7569821,
+        7.42926643, 7.10063126, 6.77211847, 6.44474686, 6.11950024, 5.79731607,
+        5.47907469, 5.1655894, 4.85759746, 4.5557522, 4.26061639, 3.97265689,
+        3.69224071, 3.41963255, 3.1549938, 2.89838302, 2.64975798, 2.40897897,
+        2.17581365, 1.94994306, 1.7309688, 1.5184213, 1.31176897, 1.11042811,
+        0.91377338, 0.72114876, 0.53187879, 0.34527985, 0.16067149, -0.02261248,
+        -0.2052132, -0.38773641, -0.57074268, -0.7547383, -0.94016691, -1.12740189,
+        -1.31673974, -1.50839427, -1.70249175, -1.8990671, -2.09806099, -2.29931793,
+        -2.50258537, -2.70751378, -2.91365763, -3.12047739, -3.32734243, -3.5335348,
+        -3.73825394, -3.94062222, -4.13969133, -4.33444941, -4.52382904, -4.70671577,
+        -4.8819575, -5.04837426, -5.20476864, -5.34993651, -5.48267825, -5.60180997,
+        -5.70617503, -5.79465538, -5.86618284, -5.91974996, -5.95442047, -5.96933909,
+        -5.96374058, -5.93695784, -5.88842893, -5.817703, -5.72444481, -5.60843792,
+        -5.4695864, -5.30791505, -5.12356808, -4.91680631, -4.68800286, -4.43763746,
+        -4.16628945, -3.87462966, -3.56341116, -3.23345928, -2.88566089, -2.52095328,
+        -2.14031282, -1.74474357, -1.33526616, -0.9129071, -0.47868867, -0.03361976,
+        0.42131236, 0.88514914, 1.35696646, 1.83587911, 2.32104375, 2.81166045,
+        3.30697287, 3.80626689, 4.30886813, 4.81413808, 5.32146929, 5.83027959,
+        6.34000558, 6.85009563, 7.36000252, 7.86917595, 8.37705518, 8.883062,
+        9.38659417, 9.88701961, 10.38367142, 10.87584399, 11.36279023, 11.84372008,
+        12.31780035, 12.78415594, 13.24187247, 13.69000027, 14.12755969, 14.55354772,
+        14.96694568, 15.36672803, 15.75187194, 16.12136773, 16.47422965, 16.80950717,
+        17.12629626, 17.42375075, 17.70109321, 17.9576256, 18.19273904, 18.40592287,
+        18.59677266, 18.76499705, 18.91042334, 19.03300168, 19.13280783, 19.21004438,
+        19.26504046, 19.29824988, 19.31024786, 19.30172618, 19.27348705, 19.22643566,
+        19.16157162, 19.07997929, 18.98281735, 18.87130757, 18.74672307, 18.61037622,
+        18.46360631, 18.3077672, 18.14421513, 17.9742968, 17.79933784, 17.62063194,
+        17.43943056, 17.25693344, 17.07427999, 16.89254157, 16.71271466, 16.5357151,
+        16.36237321, 16.19342993, 16.02953387, 15.87123925, 15.71900468, 15.5731928,
+        15.43407052, 15.30181009, 15.17649058, 15.05810012, 14.94653839, 14.84161975,
+        14.74307662, 14.65056323, 14.65056323]
+a = range(len(data))
+plt.plot(a, data)
+plt.show()

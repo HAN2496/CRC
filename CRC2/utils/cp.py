@@ -8,7 +8,7 @@ from configs.config_datasets import CP_SUBJECTS, CP_FOLDER
 
 class CP(Subject):
     def __init__(self, number):
-        super().__init__(number, CP_FOLDER, CP_SUBJECTS, extract_walking=False)
+        super().__init__(number, CP_FOLDER, CP_SUBJECTS, choose_one_dataset=True, extract_walking=False)
 
 
     def load_subject_info(self):

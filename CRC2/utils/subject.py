@@ -6,8 +6,9 @@ from scipy.signal import savgol_filter
 from utils.datasets import Datasets
 
 class Subject:
-    def __init__(self, number, data_folder, subjects_list, extract_walking=True):
+    def __init__(self, number, data_folder, subjects_list, choose_one_dataset=True, extract_walking=True):
         self.extract_walking = extract_walking
+        self.choose_one_dataset = choose_one_dataset
         if number not in subjects_list:
             raise ValueError(f"Subject number should be in {subjects_list}")
         if str(data_folder) == "EPIC":
@@ -65,14 +66,15 @@ class Subject:
         acc = torque_input / self.inertia
         return acc
 
-    def calc_kinematics(self, data):
-        pos = savgol_filter(data, window_length=30, polyorder=3)  # Smoothing
+    def calc_kinematics(self, pos, smooth=True):
+        if smooth:
+            pos = savgol_filter(pos, window_length=30, polyorder=3)  # Smoothing
         vel = np.diff(pos, prepend=pos[0]) / 0.005
         acc = np.diff(vel, prepend=vel[0]) / 0.005
         return pos, vel, acc
 
     def calc_torque(self, hip_sagittal):
-        _, _, acc = self.calc_kinematics(hip_sagittal)
+        _, _, acc = self.calc_kinematics(hip_sagittal, smooth=False)
         return self.inertia * acc
 
     def calc_inertia(self):

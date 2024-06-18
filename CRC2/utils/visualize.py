@@ -1,11 +1,17 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.animation import PillowWriter
+import random
+from tqdm import tqdm
+import imageio
+import glob
 
 if not os.path.exists('results'):
     os.makedirs('results')
 
-def visualize_predictions(model, X_test, y_test, n_samples=6, input_window_length=400, stride=1):
+def visualize_predictions_scalar(model, X_test, y_test, n_samples=6, input_window_length=400, stride=1, file_name=None, show=False):
     """
     Visualizes predicted and actual angles for sliding windows within given test sequences.
     
@@ -70,9 +76,102 @@ def visualize_predictions(model, X_test, y_test, n_samples=6, input_window_lengt
         ax2.legend(loc='upper right')
 
         plt.tight_layout()
+    if file_name is None:
+        plt.savefig('results/estimation_visualization_scalar.png', format='png', dpi=300)
+    else:
+        plt.savefig(f'results/estimation_visualization_scalar_{file_name}.png', format='png', dpi=300)
+    if show:
+        plt.show()
+    else:
+        plt.close()
 
-    plt.savefig('results/estimation_visualization.png', format='png', dpi=300)
-    plt.show()
+
+class TqdmPillowWriter(PillowWriter):
+    def setup(self, fig, outfile, dpi, *args, **kwargs):
+        super().setup(fig, outfile, dpi, *args, **kwargs)
+        if isinstance(self._frames, list):
+            self.total_frames = len(self._frames)
+        else:
+            self.total_frames = int(self._frames)
+        self.pbar = tqdm(total=self.total_frames)
+
+    def finish(self):
+        super().finish()
+        self.pbar.close()
+
+    def grab_frame(self, **savefig_kwargs):
+        frame = super().grab_frame(**savefig_kwargs)
+        self.pbar.update(1)
+        return frame
+
+def visualize_predictions_polar(model, X_test, y_test, n_samples=9, input_window_length=400, stride=10, file_name=None, show=False):
+    if len(X_test) < n_samples:
+        n_samples = len(X_test)
+    sample_indices = random.sample(range(len(X_test)), n_samples)
+
+    n_cols = int(np.sqrt(n_samples))
+    n_rows = (n_samples + n_cols - 1) // n_cols
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(8, 8))
+    axes = axes.flatten()
+
+    def init():
+        for ax in axes:
+            ax.set_xlim(-1.5, 1.5)
+            ax.set_ylim(-1.5, 1.5)
+            ax.set_aspect('equal')
+            ax.grid(True)
+            circle = plt.Circle((0, 0), 1, fill=False, color='gray', linestyle='--')
+            ax.add_patch(circle)
+            ax.plot([], [], 'ro', markersize=5, label='Predicted')
+            ax.plot([], [], 'go', markersize=5, label='Actual')
+            ax.plot([], [], 'r-', alpha=0.5)  # Line for predicted
+            ax.plot([], [], 'g-', alpha=0.5)  # Line for actual
+        return [line for ax in axes for line in ax.lines]
+
+    def animate(frame):
+        updates = []
+        for i, idx in enumerate(sample_indices):
+            sequence = X_test[idx]
+            target_sequence = y_test[idx]
+
+            mid_point = len(sequence) // 2
+            start_point = max(0, mid_point - 900)
+            end_point = min(len(sequence), mid_point + 500)
+
+            if frame < (end_point - start_point) // stride:
+                start = start_point + frame * stride
+                end = start + input_window_length
+                if end > end_point:
+                    continue
+
+                window = sequence[start:end].reshape(1, input_window_length, -1)
+                _, _, pred = model.get_X_preds(window)
+                pred = np.array(pred)
+
+                pred_x, pred_y = pred[0, 0], pred[0, 1]
+                actual_x, actual_y = target_sequence[end-1][0], target_sequence[end-1][1]
+
+                # Update positions of points and lines
+                axes[i].lines[0].set_data(pred_x, pred_y)
+                axes[i].lines[1].set_data(actual_x, actual_y)
+                axes[i].lines[2].set_data([0, pred_x], [0, pred_y])
+                axes[i].lines[3].set_data([0, actual_x], [0, actual_y])
+                updates.extend(axes[i].lines)
+        return updates
+
+    ani = animation.FuncAnimation(fig, animate, init_func=init, frames=(1000 // stride), blit=False, repeat=False)
+    writer = TqdmPillowWriter(fps=10)
+    if file_name is None:
+        ani.save(f'results/estimation_visualization_polar.gif', writer=writer)
+    else:
+        ani.save(f'results/estimation_visualization_polar_{file_name}.gif', writer=writer)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    else:
+        plt.close()
+
 
 def visualize_reference_trajectory(original_datasets, gp):
     plt.figure(figsize=(12, 8))
@@ -83,3 +182,31 @@ def visualize_reference_trajectory(original_datasets, gp):
     plt.legend('Reference trajectory')
     plt.savefig('results/reference trajectory visualization.png', format='png', dpi=300)
     plt.show()
+
+def visulize_system(idx, original, corrected, reference, scale, last=False):
+    plt.figure(figsize=(12, 8))
+    plt.plot(original['header'][:idx], original['hip_sagittal'][:idx], color='black', label='original trajectory')
+    plt.plot(corrected['header'], corrected['hip_sagittal'], color='green', linestyle='-', linewidth=2, label='corrected trajectory')
+    scale_x, scale_y = scale
+    x_reference, y_reference = reference.scale(corrected['heelstrike'][-1], corrected['header'][-1], scale_x, scale_y)
+    plt.plot(x_reference, y_reference, color='red', label='reference trajectory')
+    x_reference, y_reference = reference.scale(corrected['heelstrike'][-1], corrected['header'][-1], scale_x, scale_y, scale_from_end=False)
+    half_len = int(len(x_reference) / 4)
+    plt.plot(x_reference[:half_len], y_reference[:half_len], color='red', linestyle='--', label='control trajectory')
+    plt.title(f"heelstrike: {corrected['heelstrike'][-1]}")
+    plt.legend()
+    plt.xlabel('time (sec)')
+    plt.ylabel('hip sagittal (deg)')
+    if not os.path.exists("results/tmp"):
+        os.makedirs("results/tmp")
+    filename = f"results/tmp/{idx}.png"
+    plt.savefig(filename)
+    plt.close()
+    if last:
+        duration_rate = 1
+        exportname = "results/control"
+        frames = []
+        png_files = sorted(glob.glob(os.path.join('results/tmp', '*.png')), key=lambda x: int(os.path.basename(x).split('.')[0]))
+        for png_file in png_files:
+            frames.append(imageio.imread(png_file))
+        imageio.mimsave(f"{exportname}.gif", frames, format='GIF', duration=duration_rate)
