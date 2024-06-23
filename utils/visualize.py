@@ -226,5 +226,5 @@ def visulize_system(idx, control_target, original, corrected, reference, scale, 
             frames.append(imageio.imread(png_file))
         imageio.mimsave(f"{exportname}.gif", frames, format='GIF', duration=duration_rate)
 
-        # for filename in set(png_files):
-        #     os.remove(filename)
+        for filename in set(png_files):
+            os.remove(filename)
