@@ -1,0 +1,10 @@
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+**/.vscode/
+
+models/
+results/
+__pycache__/

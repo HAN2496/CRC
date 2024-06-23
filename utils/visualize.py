@@ -77,9 +77,11 @@ def visualize_predictions_scalar(control_target, model, X_test, y_test, n_sample
 
         plt.tight_layout()
     if file_name is None:
-        plt.savefig('results/estimation_visualization_scalar.png', format='png', dpi=300)
+        if not os.path.exists('results/estimation'):
+            os.makedirs('results/estimation')
+        plt.savefig('results/estimation/estimation_visualization_scalar.png', format='png', dpi=300)
     else:
-        plt.savefig(f'results/estimation_visualization_scalar_{file_name}.png', format='png', dpi=300)
+        plt.savefig(f'results/estimation/estimation_visualization_scalar_{file_name}.png', format='png', dpi=300)
     if show:
         plt.show()
     else:
@@ -163,9 +165,13 @@ def visualize_predictions_polar(model, X_test, y_test, n_samples=9, input_window
     ani = animation.FuncAnimation(fig, animate, init_func=init, frames=(1000 // stride), blit=False, repeat=False)
     writer = TqdmPillowWriter(fps=10)
     if file_name is None:
-        ani.save(f'results/estimation_visualization_polar.gif', writer=writer)
+        if not os.path.exists('results/estimation'):
+            os.makedirs('results/estimation')
+        ani.save(f'results/estimation/estimation_visualization_polar.gif', writer=writer)
     else:
-        ani.save(f'results/estimation_visualization_polar_{file_name}.gif', writer=writer)
+        if not os.path.exists('results/estimation'):
+            os.makedirs('results/estimation')
+        ani.save(f'results/estimation/estimation_visualization_polar_{file_name}.gif', writer=writer)
     if show:
         plt.tight_layout()
         plt.show()
@@ -210,8 +216,10 @@ def visulize_system(idx, control_target, original, corrected, reference, scale, 
     plt.savefig(filename)
     plt.close()
     if last:
+        if not os.path.exists('results/control'):
+            os.makedirs('results/control')
         duration_rate = 1
-        exportname = f"results/{name}"
+        exportname = f"results/control/{name}"
         frames = []
         png_files = sorted(glob.glob(os.path.join('results/tmp', '*.png')), key=lambda x: int(os.path.basename(x).split('.')[0]))
         for png_file in png_files:
