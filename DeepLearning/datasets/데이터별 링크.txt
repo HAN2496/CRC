@@ -1,4 +1,0 @@
-[injury_free]
-https://figshare.com/articles/dataset/A_multimodal_dataset_of_human_gait_at_different_walking_speeds/7734767?file=22295019
-[epic]
-https://www.epic.gatech.edu/opensource-biomechanics-camargo-et-al/
