@@ -47,11 +47,12 @@ To run the simulation, execute the following command:
 # For training estimation model
 python -m train
 
-# For Gaussian process regression
-python -m trajectory_generator
-
 # For simulation
 python -m simulation
+
+# For Gaussian process regression
+python -m src/trajectory_generator
+
 ```
 &nbsp;
 
