@@ -24,7 +24,7 @@ Ensure that you have Python installed on your system. This project requires:
 
 ### Clone the repository
 ```bash
-git clone https://github.com/manhyeongwoo/MLP_project_4.git
+git clone https://github.com/HAN2496/MLP_project_4.git
 cd MLP_project_4
 ```
 
