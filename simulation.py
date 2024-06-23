@@ -15,14 +15,14 @@ from configs.config_estimation import MODEL_NAME, NUM_EPOCHS, BATCH_SIZE, LEARNI
 #Choose whether control Knee or Hip
 is_hip = False
 if is_hip:
-    control_target_name = ""
+    control_target_name = "hip"
     control_target = "hip_sagittal"
     control_target_v = "hip_sagittal_v"
     control_target_a = "hip_sagittal_a"
     control_target_t = "hip_sagittal_torque"
     num = 4
 else:
-    control_target_name = "_knee"
+    control_target_name = "knee"
     control_target = "knee_sagittal"
     control_target_v = "knee_sagittal_v"
     control_target_a = "knee_sagittal_a"
@@ -39,7 +39,7 @@ else:
 """
 Step1: Load estimation model
 """
-model_path = f'models/{MODEL_NAME}_knee.pth'
+model_path = f'models/{MODEL_NAME}_{control_target_name}.pth'
 print(f"model path: {model_path}")
 model = load_learner(model_path)
 
@@ -49,7 +49,7 @@ Step2:  Load reference trajectory (by gaussian process)
 td = TD(number=6, choose_one_dataset=False, extract_walking=False)
 td.extract_one_datasets(True, num=num)
 td.extract_walking_phases(section_start=3, interval=4)
-reference = Reference(filename=f'models/gaussian_process_regressor{control_target_name}')
+reference = Reference(filename=f'models/gaussian_process_regressor_{control_target_name}')
 
 """
 Step3: Control

@@ -11,7 +11,7 @@ import glob
 if not os.path.exists('results'):
     os.makedirs('results')
 
-def visualize_predictions_scalar(control_target, model, X_test, y_test, n_samples=6, input_window_length=400, stride=1, file_name=None, show=False):
+def visualize_predictions_scalar(control_target_name, file_name, model, X_test, y_test, n_samples=6, input_window_length=400, stride=1, show=False):
     """
     Visualizes predicted and actual angles for sliding windows within given test sequences.
     
@@ -67,7 +67,7 @@ def visualize_predictions_scalar(control_target, model, X_test, y_test, n_sample
 
         # Add second y-axis for hip_sagittal data
         ax2 = ax1.twinx()
-        ax2.plot(sequence[(start_point+input_window_length):end_point, 0], label='Input Hip Sagittal', linestyle='--', alpha=0.5)
+        ax2.plot(sequence[(start_point+input_window_length):end_point, 0], label=f'Input {control_target_name} angle', linestyle='--', alpha=0.5)
         # ax2.set_ylabel('Hip Sagittal Angle (degrees)')
         ax2.tick_params(axis='y')
 
@@ -76,12 +76,9 @@ def visualize_predictions_scalar(control_target, model, X_test, y_test, n_sample
         ax2.legend(loc='upper right')
 
         plt.tight_layout()
-    if file_name is None:
-        if not os.path.exists('results/estimation'):
-            os.makedirs('results/estimation')
-        plt.savefig('results/estimation/estimation_visualization_scalar.png', format='png', dpi=300)
-    else:
-        plt.savefig(f'results/estimation/estimation_visualization_scalar_{file_name}.png', format='png', dpi=300)
+    if not os.path.exists('results/estimation'):
+        os.makedirs('results/estimation')
+    plt.savefig(f'results/estimation/estimation_visualization_scalar_{file_name}.png', format='png', dpi=300)
     if show:
         plt.show()
     else:
@@ -106,7 +103,7 @@ class TqdmPillowWriter(PillowWriter):
         self.pbar.update(1)
         return frame
 
-def visualize_predictions_polar(model, X_test, y_test, n_samples=9, input_window_length=400, stride=10, file_name=None, show=False):
+def visualize_predictions_polar(file_name, model, X_test, y_test, n_samples=9, input_window_length=400, stride=10, show=False):
     if len(X_test) < n_samples:
         n_samples = len(X_test)
     sample_indices = random.sample(range(len(X_test)), n_samples)
@@ -164,14 +161,9 @@ def visualize_predictions_polar(model, X_test, y_test, n_samples=9, input_window
 
     ani = animation.FuncAnimation(fig, animate, init_func=init, frames=(1000 // stride), blit=False, repeat=False)
     writer = TqdmPillowWriter(fps=10)
-    if file_name is None:
-        if not os.path.exists('results/estimation'):
-            os.makedirs('results/estimation')
-        ani.save(f'results/estimation/estimation_visualization_polar.gif', writer=writer)
-    else:
-        if not os.path.exists('results/estimation'):
-            os.makedirs('results/estimation')
-        ani.save(f'results/estimation/estimation_visualization_polar_{file_name}.gif', writer=writer)
+    if not os.path.exists('results/estimation'):
+        os.makedirs('results/estimation')
+    ani.save(f'results/estimation/estimation_polar_{file_name}.gif', writer=writer)
     if show:
         plt.tight_layout()
         plt.show()
@@ -187,7 +179,9 @@ def visualize_reference_trajectory(control_target, original_datasets, gp):
                     color='blue', alpha=0.2, label='Confidence Interval (1 std dev)')
     plt.title('Reference trajectory')
     plt.legend(loc='upper right')
-    plt.savefig(f'results/reference trajectory visualization_{control_target}.png', format='png', dpi=300)
+    if not os.path.exists('results/reference trajectory'):
+        os.makedirs('results/reference trajectory')
+    plt.savefig(f'results/reference trajectory/reference trajectory visualization_{control_target}.png', format='png', dpi=300)
     plt.show()
 
 def visulize_system(idx, control_target, original, corrected, reference, scale, name="contorl", last=False):

@@ -1,0 +1,9 @@
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+**/.vscode/
+
+results/
+__pycache__/
